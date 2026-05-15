@@ -1,6 +1,6 @@
 [#TA_A_25650_02]
-===== TA_A_25650_02 - PDP Client Registrierung - TI-Identität in Attestation - Bindung TelematikID
+===== TA_A_25650_02 - PDP Client-Registrierung - TI-Identität in Attestation - Bindung TelematikID
 
-"Die Komponente **Authorization Server** MUSS den **registrierten Client an eine TI-Identität**
+"Die Komponente **Authorization Server** MUSS den **registrierten Client, wenn möglich, an eine TI-Identität**
 
-(KVNR oder **TelematikID**, festgestellt während der Authentifizierung) **binden**.[<=]"
+(mit KVNR oder **TelematikID**) **binden**.[<=]"

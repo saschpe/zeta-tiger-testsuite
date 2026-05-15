@@ -28,32 +28,64 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.networknt.schema.Error;
 import com.networknt.schema.Schema;
 import com.networknt.schema.SchemaLocation;
 import com.networknt.schema.SchemaRegistry;
 import com.networknt.schema.SpecificationVersion;
 import com.nimbusds.jwt.SignedJWT;
+import de.gematik.test.tiger.common.config.TigerGlobalConfiguration;
 import io.cucumber.java.de.Dann;
 import io.cucumber.java.en.Then;
+import java.io.IOException;
 import java.text.ParseException;
 import java.util.Comparator;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Step definitions for validating JSON instances against JSON/YAML schemas using the networknt JSON
- * Schema validator.
+ * Step definitions for validating JSON instances against JSON/YAML schemas using the networknt JSON Schema validator.
  */
 @Slf4j
 public class SchemaValidationSteps {
 
+  private static final String ALLOW_ADDITIONAL_PROPERTIES_CONFIG =
+      "schemaValidation.allowAdditionalProperties";
+  private static final String SOFT_ASSERT = "schemaValidation.soft";
+
   private static final ObjectMapper JSON = new ObjectMapper();
+  private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());
   /**
-   * Shared registry for loading schemas using the new networknt 2.x API with a Draft-7 default
-   * (used when a schema does not provide $schema).
+   * Shared registry for loading schemas using the new networknt 2.x API with a Draft-7 default (used when a schema does not provide
+   * $schema).
    */
   private static final SchemaRegistry SCHEMA_REGISTRY =
       SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_7);
+  private static final SchemaRegistry STRICT_SCHEMA_REGISTRY =
+      SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_7,
+          builder -> builder.schemaCacheEnabled(false));
+
+  /**
+   * Reads whether regular schema validation should allow additional object properties.
+   * Returns {@code true} by default if the global property {@value ALLOW_ADDITIONAL_PROPERTIES_CONFIG} is not set.
+   *
+   * @return true if additional object properties are allowed
+   */
+  private boolean isAdditionalPropertiesAllowed() {
+    return TigerGlobalConfiguration.readBooleanOptional(ALLOW_ADDITIONAL_PROPERTIES_CONFIG)
+        .orElse(true);
+  }
+
+  /**
+   * Reads whether validation errors should break the scenario and skip the following steps.
+   * Returns {@code false} by default if the global property {@value SOFT_ASSERT} is not set.
+   *
+   * @return true if soft assert is active
+   */
+  private boolean isSoftAssertActive() {
+    return TigerGlobalConfiguration.readBooleanOptional(SOFT_ASSERT)
+        .orElse(false);
+  }
 
   /**
    * Loads a YAML schema file from the classpath (resources directory).
@@ -62,6 +94,18 @@ public class SchemaValidationSteps {
    * @return {@link Schema} configured with the schema's base location
    */
   private Schema loadYamlSchema(String schemaName) {
+    return loadYamlSchema(schemaName, !isAdditionalPropertiesAllowed());
+  }
+
+  /**
+   * Loads a YAML schema file from the classpath and optionally makes every object schema strict.
+   *
+   * @param schemaName name or relative path of the schema on the classpath
+   * @param strict     if true, object schemas without an explicit {@code additionalProperties} declaration are copied with
+   *                   {@code additionalProperties: false}
+   * @return {@link Schema} configured with the schema's base location
+   */
+  private Schema loadYamlSchema(String schemaName, boolean strict) {
     var normalizedPath = schemaName.startsWith("/") ? schemaName.substring(1) : schemaName;
     if (!normalizedPath.startsWith("schemas/")) {
       normalizedPath = "schemas/v_1_0/" + normalizedPath;
@@ -73,7 +117,57 @@ public class SchemaValidationSteps {
     }
 
     var location = SchemaLocation.of("classpath:" + normalizedPath);
-    return SCHEMA_REGISTRY.getSchema(location);
+    if (!strict) {
+      return SCHEMA_REGISTRY.getSchema(location);
+    }
+
+    try {
+      var strictSchemaNode = YAML.readTree(resource).deepCopy();
+      disallowAdditionalProperties(strictSchemaNode);
+      return STRICT_SCHEMA_REGISTRY.getSchema(location, strictSchemaNode);
+    } catch (IOException e) {
+      throw new AssertionError("Schema could not be read from the classpath: " + normalizedPath,
+          e);
+    }
+  }
+
+  /**
+   * Recursively injects {@code additionalProperties: false} into object schemas that do not already define their own additional-properties
+   * behavior.
+   *
+   * @param node the schema node to adjust in-place
+   */
+  private void disallowAdditionalProperties(JsonNode node) {
+    if (node instanceof ObjectNode objectNode) {
+      objectNode.properties().forEach(entry -> disallowAdditionalProperties(entry.getValue()));
+
+      if (isObjectSchema(objectNode) && !objectNode.has("additionalProperties")) {
+        objectNode.put("additionalProperties", false);
+      }
+    } else if (node.isArray()) {
+      node.forEach(this::disallowAdditionalProperties);
+    }
+  }
+
+  /**
+   * Determines whether a JSON Schema node describes an object.
+   *
+   * @param objectNode the schema node to inspect
+   * @return true if the node is an object schema
+   */
+  private boolean isObjectSchema(ObjectNode objectNode) {
+    var type = objectNode.get("type");
+    if (type != null && type.isTextual() && "object".equals(type.asText())) {
+      return true;
+    }
+    if (type != null && type.isArray()) {
+      for (JsonNode typeEntry : type) {
+        if (typeEntry.isTextual() && "object".equals(typeEntry.asText())) {
+          return true;
+        }
+      }
+    }
+    return objectNode.has("properties");
   }
 
   /**
@@ -124,8 +218,7 @@ public class SchemaValidationSteps {
   }
 
   /**
-   * Cucumber step definition for validating a JSON string against a schema loaded from the
-   * resources directory.
+   * Cucumber step definition for validating a JSON string against a schema loaded from the resources directory.
    *
    * @param jsonString the JSON string to validate
    * @param schemaPath relative path of the schema under {@code resources}
@@ -135,44 +228,11 @@ public class SchemaValidationSteps {
   public void validateJsonAgainstYamlSchema(String jsonString, String schemaPath) {
     var schema = loadYamlSchema(schemaPath);
     JsonNode jsonNode = CheckMessageSteps.parseJsonString(jsonString, false);
-    assertValid(schema, jsonNode, schemaPath, false);
+    assertValid(schema, jsonNode, schemaPath, isSoftAssertActive());
   }
 
   /**
-   * Soft-asserting variant of the schema validation that collects failures until the end of the
-   * scenario instead of aborting immediately.
-   *
-   * @param jsonString the JSON string to validate
-   * @param schemaPath relative path of the schema under {@code resources}
-   */
-  @Dann("validiere {tigerResolvedString} soft gegen Schema {string}")
-  @Then("soft-validate {tigerResolvedString} against schema {string}")
-  public void softlyValidateJsonAgainstYamlSchema(String jsonString, String schemaPath) {
-
-    var schema = loadYamlSchema(schemaPath);
-    JsonNode jsonNode = CheckMessageSteps.parseJsonString(jsonString, false);
-    assertValid(schema, jsonNode, schemaPath, true);
-  }
-
-  /**
-   * Soft-asserting variant of the schema validation of a Base64 coded JSON string.
-   *
-   * @param encodedJwt the Base64 coded JWT to be validated
-   * @param schemaName relative path of the schema under {@code resources}
-   */
-  @Dann("decodiere und validiere {tigerResolvedString} gegen Schema {string} soft assert")
-  @Then("decode and validate {tigerResolvedString} against schema {string} soft assert")
-  public void softlyValidateEncodedJwtAgainstYamlSchema(String encodedJwt,
-      String schemaName) {
-
-    var schema = loadYamlSchema(schemaName);
-    var jsonNode = decodeJwt(encodedJwt);
-    assertValid(schema, jsonNode, schemaName, true);
-  }
-
-  /**
-   * Cucumber step definition for validating a Base64 coded JSON string against a schema loaded from
-   * the resources directory.
+   * Cucumber step definition for validating a Base64 coded JSON string against a schema loaded from the resources directory.
    *
    * <p>The encoded token is expected to consist of at least two parts separated by dots:
    *   <ol>
@@ -190,7 +250,7 @@ public class SchemaValidationSteps {
   public void validateEncodedJwtAgainstYamlSchema(String encodedJwt, String schemaName) {
     var schema = loadYamlSchema(schemaName);
     var jsonNode = decodeJwt(encodedJwt);
-    assertValid(schema, jsonNode, schemaName, false);
+    assertValid(schema, jsonNode, schemaName, isSoftAssertActive());
   }
 
   /**
@@ -216,4 +276,3 @@ public class SchemaValidationSteps {
   }
 
 }
-

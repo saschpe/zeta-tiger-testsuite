@@ -3,7 +3,7 @@
 
 "Die Komponente Authorization Server MUSS die Zugriffs-Entscheidung eines PDP mittels
 
-der Ausgabe eines Access und eines Refresh Tokens umsetzen bzw. eine
+der Ausgabe eines Access und eines Refresh Token umsetzen bzw. eine
 
 **Zugriffsverweigerung mit einem HTTP-Statuscode 403** quittieren.
 

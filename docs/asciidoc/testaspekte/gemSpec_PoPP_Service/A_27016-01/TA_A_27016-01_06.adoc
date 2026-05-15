@@ -1,0 +1,4 @@
+[#TA_A_27016-01_06]
+===== TA_A_27016-01_06 - PoPP-Verifier - OCSP-Antwort stündlich aktualisiert
+
+"Der PoPP-Verifier, der das Signaturzertifikat des PoPP-Token via TI-PKI prüft, MUSS dabei verifizieren, dass für das Signaturzertifikat **stündlich eine neue OCSP-Antwort geholt wird**."

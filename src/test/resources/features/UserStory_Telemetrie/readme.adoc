@@ -12,5 +12,7 @@ Abgrenzung:
 === Identifizierte Use Cases
 
 :leveloffset: +2
+
 include::UseCase_01/readme.adoc[]
+
 :leveloffset: -2

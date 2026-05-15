@@ -24,8 +24,6 @@ achelos GmbH
 ifndef::revnumber[:revnumber: dev]
 ifndef::revdate[:revdate: {localdate}]
 
-include::afos/readme_aliases.adoc[]
-
 include::chapters/00_glossar.adoc[]
 
 include::chapters/01_testplan_identifier.adoc[]

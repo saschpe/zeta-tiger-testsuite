@@ -2,7 +2,10 @@
 <configuration>
     <property name="LOG_DIR" value="${LOG_DIR:-${java.io.tmpdir}/zeta-testsuite-logs}"/>
     <property name="CONSOLE_LOG_LEVEL" value="${CONSOLE_LOG_LEVEL:-WARN}"/>
-    <property name="FILE_LOG_LEVEL" value="${FILE_LOG_LEVEL:-DEBUG}"/>
+    <property name="FILE_LOG_LEVEL" value="${FILE_LOG_LEVEL:-INFO}"/>
+    <property name="TIGER_LOG_LEVEL" value="${TIGER_LOG_LEVEL:-INFO}"/>
+    <property name="TIGER_PROXY_LOG_LEVEL" value="${TIGER_PROXY_LOG_LEVEL:-INFO}"/>
+    <property name="RBEL_LOG_LEVEL" value="${RBEL_LOG_LEVEL:-WARN}"/>
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
@@ -36,8 +39,9 @@
         <appender-ref ref="FILE"/>
     </appender>
 
-    <logger name="de.gematik.test.tiger" level="DEBUG"/>
-    <logger name="de.gematik.test.tiger.proxy" level="DEBUG"/>
+    <logger name="de.gematik.test.tiger" level="${TIGER_LOG_LEVEL}"/>
+    <logger name="de.gematik.test.tiger.proxy" level="${TIGER_PROXY_LOG_LEVEL}"/>
+    <logger name="de.gematik.rbellogger" level="${RBEL_LOG_LEVEL}"/>
 
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>

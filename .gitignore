@@ -336,9 +336,6 @@ pyrightconfig.json
 
 # End of https://www.toptal.com/developers/gitignore/api/java,intellij,maven,python
 
-# --- Whitelist JMeter distribution (rekursiv) ---
-!tools/apache-jmeter-5.6.3/**
-
 # uv build artifacts
 **/.venv/
 .uv/
@@ -367,9 +364,8 @@ reports/
 # private key
 src/test/resources/mocks/jwt-sign-key.pem
 src/test/resources/keys/**
-# 3rd party tools
-tools/**
 src/test/resources/features/UserStory_01/orphan
 docs/scripts/src/testsuite_docs/fetch_youtrack_testaspects.py
 .gitlab-ci.yml
+docs/asciidoc/tables/source/runtime_failure_annotations.internal.csv
 

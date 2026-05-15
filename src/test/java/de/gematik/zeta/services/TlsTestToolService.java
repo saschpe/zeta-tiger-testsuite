@@ -26,6 +26,7 @@ package de.gematik.zeta.services;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import de.gematik.zeta.services.model.TlsCaCertificateUploadPayload;
 import de.gematik.zeta.services.model.TlsCertificateUploadPayload;
 import de.gematik.zeta.services.model.TlsToolConfigResponse;
 import de.gematik.zeta.services.model.TlsToolStateResponse;
@@ -174,6 +175,34 @@ public class TlsTestToolService {
   }
 
   /**
+   * Uploads PEM encoded CA certificate material for the next TLS test tool run.
+   *
+   * @param caCertificatePath CA certificate file path
+   */
+  public void updateCaCertificate(Path caCertificatePath) {
+    try {
+      Objects.requireNonNull(caCertificatePath, "caCertificatePath must not be null");
+      if (!Files.isRegularFile(caCertificatePath)) {
+        throw new IllegalArgumentException("caCertificatePath must point to an existing file: " + caCertificatePath);
+      }
+      if (!Files.isReadable(caCertificatePath)) {
+        throw new IllegalArgumentException("caCertificatePath is not readable: " + caCertificatePath);
+      }
+
+      var request = new TlsCaCertificateUploadPayload(Files.readString(caCertificatePath, StandardCharsets.UTF_8));
+      var headers = new HttpHeaders();
+      headers.setContentType(MediaType.APPLICATION_JSON);
+      exchange("/caCertificate", HttpMethod.PUT, new HttpEntity<>(objectMapper.writeValueAsString(request), headers), Void.class);
+    } catch (IllegalArgumentException e) {
+      throw new AssertionError("Invalid TLS test tool CA certificate input file.", e);
+    } catch (JsonProcessingException e) {
+      throw new AssertionError("Failed to serialize TLS test tool service request body.", e);
+    } catch (IOException e) {
+      throw new AssertionError("Failed to read TLS test tool CA certificate input file.", e);
+    }
+  }
+
+  /**
    * Reads the current process state.
    *
    * @return state payload
@@ -183,12 +212,21 @@ public class TlsTestToolService {
   }
 
   /**
-   * Starts the TLS test tool process.
+   * Starts the TLS test tool process as TLS server.
    *
    * @return resulting process state
    */
-  public TlsToolStateResponse start() {
-    return exchangeForJson("/start", HttpMethod.POST, HttpEntity.EMPTY, TlsToolStateResponse.class);
+  public TlsToolStateResponse startAsTlsServer() {
+    return exchangeForJson("/startAsTlsServer", HttpMethod.POST, HttpEntity.EMPTY, TlsToolStateResponse.class);
+  }
+
+  /**
+   * Starts the TLS test tool process as TLS client.
+   *
+   * @return resulting process state
+   */
+  public TlsToolStateResponse startAsTlsClient() {
+    return exchangeForJson("/startAsTlsClient", HttpMethod.POST, HttpEntity.EMPTY, TlsToolStateResponse.class);
   }
 
   /**

@@ -173,6 +173,7 @@ Bei negativer Berechtigungsprüfung erhält der ZETA Client über den ZETA Guard
 === Identifizierte Use Cases
 
 :leveloffset: +2
+
 include::UseCase_01/readme.adoc[]
 
 include::UseCase_02/readme.adoc[]
@@ -224,4 +225,9 @@ include::UseCase_24/readme.adoc[]
 include::UseCase_25/readme.adoc[]
 
 include::UseCase_26/readme.adoc[]
+
+include::UseCase_27/readme.adoc[]
+
+include::UseCase_28/readme.adoc[]
+
 :leveloffset: -2

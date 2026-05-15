@@ -44,6 +44,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.text.ParseException;
 import java.util.Base64;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -164,6 +165,19 @@ public class DpopValidationSteps {
     }
 
     log.info("jwk validation successful: no private key parameters found");
+  }
+
+  /**
+   * Generates a fresh DPoP jti and stores it as a Tiger variable.
+   *
+   * @param varName the variable name to store the generated jti
+   */
+  @Und("erzeuge eindeutige DPoP jti und speichere in Variable {tigerResolvedString}")
+  @And("generate unique DPoP jti and store in variable {tigerResolvedString}")
+  public void generateUniqueDpopJti(String varName) {
+    var jti = UUID.randomUUID().toString();
+    TigerGlobalConfiguration.putValue(varName, jti, ConfigurationValuePrecedence.TEST_CONTEXT);
+    log.info("Generated unique DPoP jti for variable '{}'", varName);
   }
 
   /**

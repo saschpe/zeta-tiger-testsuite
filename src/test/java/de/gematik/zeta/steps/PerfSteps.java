@@ -27,7 +27,6 @@ package de.gematik.zeta.steps;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.gematik.test.tiger.common.config.TigerGlobalConfiguration;
-import de.gematik.test.tiger.lib.reports.SerenityReportUtils;
 import de.gematik.zeta.Metric;
 import de.gematik.zeta.services.SslConfigurationService;
 import io.cucumber.java.de.Dann;
@@ -47,7 +46,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
 import lombok.extern.slf4j.Slf4j;
@@ -136,6 +134,39 @@ public class PerfSteps {
   }
 
   /**
+   * Asserts the combined Prometheus error rate across multiple spans over a second-based lookback
+   * window ending at the current evaluation time.
+   *
+   * @param serviceName the Prometheus service label value
+   * @param spanNames comma-separated Prometheus span label values
+   * @param windowSeconds the histogram lookback window in seconds
+   * @param maxErrorRatePercentStr the maximum allowed combined error rate in percent
+   */
+  @Dann(
+      "stelle sicher, dass in Prometheus für Service {string}, Spans {string}, "
+          + "Fenster {tigerResolvedString} Sekunden die kombinierte Fehlerrate <= "
+          + "{tigerResolvedString} Prozent ist")
+  @Then(
+      "ensure that in Prometheus for service {string}, spans {string}, "
+          + "window {tigerResolvedString} seconds the combined error rate is <= "
+          + "{tigerResolvedString} percent")
+  public void assertPrometheusCombinedErrorRateLeSeconds(
+      String serviceName,
+      String spanNames,
+      String windowSeconds,
+      String maxErrorRatePercentStr) {
+    double maxErrorRatePercent = Double.parseDouble(
+        TigerGlobalConfiguration.resolvePlaceholders(maxErrorRatePercentStr).trim().replace(',', '.'));
+    int resolvedWindowSeconds = parsePositiveInteger(windowSeconds, "windowSeconds");
+    String rangeSelector = resolvedWindowSeconds + "s";
+    assertPrometheusCombinedErrorRateLeInternal(
+        serviceName,
+        spanNames,
+        rangeSelector,
+        maxErrorRatePercent);
+  }
+
+  /**
    * Asserts the combined Prometheus request rate across multiple spans over a second-based lookback
    * window ending at the current evaluation time while dividing by the explicit test duration.
    *
@@ -148,23 +179,38 @@ public class PerfSteps {
   @Dann(
       "stelle sicher, dass in Prometheus für Service {string}, "
           + "Spans {string}, Fenster {tigerResolvedString} Sekunden und "
-          + "Divisor {tigerResolvedString} Sekunden die kombinierte Rate >= {int} pro Sekunde ist")
+          + "Divisor {tigerResolvedString} Sekunden die kombinierte Rate >= {tigerResolvedString} pro Sekunde ist")
   @Then(
       "ensure that in Prometheus for service {string}, spans {string}, "
           + "window {tigerResolvedString} seconds and divisor {tigerResolvedString} "
-          + "seconds the combined rate is >= {int} per second")
+          + "seconds the combined rate is >= {tigerResolvedString} per second")
   public void assertPrometheusCombinedRateGeSecondsWithDivisor(
       String serviceName,
       String spanNames,
       String windowSeconds,
       String divisorSeconds,
-      Integer minRatePerSecond) {
+      String minRatePerSecond) {
     int resolvedWindowSeconds = parsePositiveInteger(windowSeconds, "windowSeconds");
     int resolvedDivisorSeconds = parsePositiveInteger(divisorSeconds, "divisorSeconds");
+    int resolvedMinRatePerSecond = parsePositiveInteger(minRatePerSecond, "minRatePerSecond");
     String rangeSelector = resolvedWindowSeconds + "s";
-    assertPrometheusCombinedRateGeInternal(serviceName, spanNames, rangeSelector, resolvedDivisorSeconds, minRatePerSecond);
+    assertPrometheusCombinedRateGeInternal(
+        serviceName,
+        spanNames,
+        rangeSelector,
+        resolvedDivisorSeconds,
+        resolvedMinRatePerSecond);
   }
 
+  /**
+   * Asserts the combined Prometheus request rate for several spans of one service.
+   *
+   * @param serviceName the Prometheus service label value
+   * @param spanNames comma-separated Prometheus span label values
+   * @param rangeSelector the Prometheus lookback range selector
+   * @param divisorSeconds divisor used to normalize the count to requests per second
+   * @param minRatePerSecond the minimum expected rate in requests per second
+   */
   private void assertPrometheusCombinedRateGeInternal(
       String serviceName,
       String spanNames,
@@ -173,11 +219,7 @@ public class PerfSteps {
       Integer minRatePerSecond) {
     String resolvedServiceName = TigerGlobalConfiguration.resolvePlaceholders(serviceName);
 
-    List<String> spans = Arrays.stream(spanNames.split(","))
-        .map(String::trim)
-        .map(TigerGlobalConfiguration::resolvePlaceholders)
-        .filter(s -> !s.isEmpty())
-        .collect(Collectors.toList());
+    List<String> spans = parsePrometheusSpanNames(spanNames);
 
     // Aggregate each span to a scalar first so spans with different labels can be added safely.
     String sumParts = spans.stream()
@@ -217,7 +259,7 @@ public class PerfSteps {
           resolvedServiceName, spans, samplesText, rangeSelector, divisorSeconds, rateText, minRatePerSecond, ratePromQl);
 
       log.warn("[ASSERT PROMETHEUS COMBINED RATE] {}", reportText);
-      SerenityReportUtils.addCustomData("Prometheus combined rate", reportText);
+      ReportAttachments.addText("Prometheus combined rate", reportText);
 
       if (combinedCount <= 0) {
         var ex = new AssertionError(String.format(Locale.ROOT,
@@ -232,11 +274,125 @@ public class PerfSteps {
       } else {
         log.info("[ASSERT PROMETHEUS COMBINED RATE] PASS rate={}/s >= {}/s for service={} spans={}",
             rateText, minRatePerSecond, resolvedServiceName, spans);
-        SerenityReportUtils.addCustomData("Prometheus combined rate check",
+        ReportAttachments.addText("Prometheus combined rate check",
             String.format(Locale.ROOT, "PASS rate=%s/s >= %d/s", rateText, minRatePerSecond));
       }
     } catch (Exception e) {
       throw new AssertionError("Prometheus combined rate query failed: " + e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Asserts the combined Prometheus error rate for several spans of one service.
+   *
+   * @param serviceName the Prometheus service label value
+   * @param spanNames comma-separated Prometheus span label values
+   * @param rangeSelector the Prometheus lookback range selector
+   * @param maxErrorRatePercent the maximum allowed error rate in percent
+   */
+  private void assertPrometheusCombinedErrorRateLeInternal(
+      String serviceName,
+      String spanNames,
+      String rangeSelector,
+      double maxErrorRatePercent) {
+    String resolvedServiceName = TigerGlobalConfiguration.resolvePlaceholders(serviceName);
+    List<String> spans = parsePrometheusSpanNames(spanNames);
+
+    try {
+      Map<String, Double> errorCounts = queryPrometheusSpanCounts(
+          resolvedServiceName,
+          spans,
+          rangeSelector,
+          "zeta_test_status_code=\"STATUS_CODE_ERROR\"");
+      Map<String, Double> labeledCounts = queryPrometheusSpanCounts(
+          resolvedServiceName,
+          spans,
+          rangeSelector,
+          "zeta_test_status_code=~\".+\"");
+      Map<String, Double> totalCounts = queryPrometheusSpanCounts(
+          resolvedServiceName,
+          spans,
+          rangeSelector,
+          null);
+
+      double errorCount = sumFiniteCounts(errorCounts);
+      double labeledCount = sumFiniteCounts(labeledCounts);
+      double totalCount = sumFiniteCounts(totalCounts);
+
+      String totalCountText = String.format(Locale.ROOT, "%.1f", totalCount);
+      String samplesText = spans.stream()
+          .map(span -> String.format(
+              Locale.ROOT,
+              "%s={error=%s,labeled=%s,total=%s}",
+              span,
+              formatPrometheusCount(errorCounts.get(span), true),
+              formatPrometheusCount(labeledCounts.get(span), true),
+              formatPrometheusCount(totalCounts.get(span), false)))
+          .collect(Collectors.joining(", "));
+
+      if (totalCount <= 0) {
+        String reportText = String.format(Locale.ROOT,
+            "service=%s, spans=%s, samples={%s}, window=%s, totalCount=%s - no samples",
+            resolvedServiceName, spans, samplesText, rangeSelector, totalCountText);
+        log.warn("[ASSERT PROMETHEUS COMBINED ERROR RATE] {}", reportText);
+        ReportAttachments.addText("Prometheus combined error rate", reportText);
+        var ex = new AssertionError(String.format(Locale.ROOT,
+            "Prometheus combined error rate check has no samples for service=%s spans=%s window=%s - "
+                + "verify span names and telemetry pipeline",
+            resolvedServiceName, spans, rangeSelector));
+        SoftAssertionsContext.recordSoftFailure(ex.getMessage(), ex);
+        return;
+      }
+
+      if (labeledCount <= 0) {
+        boolean noErrors = errorCount <= 0;
+        String reportText = String.format(Locale.ROOT,
+            "service=%s, spans=%s, samples={%s}, window=%s, totalCount=%s - %s",
+            resolvedServiceName, spans, samplesText, rangeSelector, totalCountText,
+            noErrors
+                ? "all spans successful (zeta_test_status_code not set = no HTTP 4xx/5xx), errorRate=0.00%% -> PASS"
+                : "errorCount=" + String.format(Locale.ROOT, "%.1f", errorCount)
+                    + " but zeta_test_status_code not set on any span -> FAIL");
+        log.warn("[ASSERT PROMETHEUS COMBINED ERROR RATE] {}", reportText);
+        ReportAttachments.addText("Prometheus combined error rate", reportText);
+        if (!noErrors) {
+          var ex = new AssertionError(String.format(Locale.ROOT,
+              "Prometheus combined error rate check has error spans for service=%s spans=%s window=%s "
+                  + "but no labeled total - cannot compute rate, treating as failure",
+              resolvedServiceName, spans, rangeSelector));
+          SoftAssertionsContext.recordSoftFailure(ex.getMessage(), ex);
+        }
+        return;
+      }
+
+      double errorRatePercent = errorCount > 0
+          ? errorCount / totalCount * 100.0
+          : 0.0;
+      String errorCountText = errorCount <= 0
+          ? "0 (no error spans)"
+          : String.format(Locale.ROOT, "%.1f", errorCount);
+      String rateText = String.format(Locale.ROOT, "%.2f", errorRatePercent);
+      String reportText = String.format(Locale.ROOT,
+          "service=%s, spans=%s, samples={%s}, window=%s, errorCount=%s, totalCount=%s, "
+              + "errorRate=%s%%, threshold=%.1f%%",
+          resolvedServiceName, spans, samplesText, rangeSelector, errorCountText, totalCountText,
+          rateText, maxErrorRatePercent);
+      log.warn("[ASSERT PROMETHEUS COMBINED ERROR RATE] {}", reportText);
+      ReportAttachments.addText("Prometheus combined error rate", reportText);
+
+      if (errorRatePercent > maxErrorRatePercent) {
+        var ex = new AssertionError(String.format(Locale.ROOT,
+            "Prometheus combined error rate %.2f%% > %.1f%% for service=%s spans=%s window=%s",
+            errorRatePercent, maxErrorRatePercent, resolvedServiceName, spans, rangeSelector));
+        SoftAssertionsContext.recordSoftFailure(ex.getMessage(), ex);
+      } else {
+        log.info("[ASSERT PROMETHEUS COMBINED ERROR RATE] PASS errorRate={}% <= {}% for service={} spans={}",
+            rateText, maxErrorRatePercent, resolvedServiceName, spans);
+        ReportAttachments.addText("Prometheus combined error rate check",
+            String.format(Locale.ROOT, "PASS errorRate=%s%% <= %.1f%%", rateText, maxErrorRatePercent));
+      }
+    } catch (Exception e) {
+      throw new AssertionError("Prometheus combined error rate query failed: " + e.getMessage(), e);
     }
   }
 
@@ -250,20 +406,40 @@ public class PerfSteps {
    * @param divisorSeconds the divisor used to normalize the count to requests per second
    * @param minRatePerSecond the minimum expected rate in requests per second
    */
-  @Dann("stelle sicher, dass in Prometheus für Service {string}, Span {string}, Fenster {tigerResolvedString} Sekunden und Divisor {tigerResolvedString} Sekunden die Rate >= {int} pro Sekunde ist")
-  @Then("ensure that in Prometheus for service {string}, span {string}, window {tigerResolvedString} seconds and divisor {tigerResolvedString} seconds the rate is >= {int} per second")
+  @Dann(
+      "stelle sicher, dass in Prometheus für Service {string}, Span {string}, "
+          + "Fenster {tigerResolvedString} Sekunden und Divisor {tigerResolvedString} Sekunden "
+          + "die Rate >= {tigerResolvedString} pro Sekunde ist")
+  @Then(
+      "ensure that in Prometheus for service {string}, span {string}, "
+          + "window {tigerResolvedString} seconds and divisor {tigerResolvedString} seconds "
+          + "the rate is >= {tigerResolvedString} per second")
   public void assertPrometheusRateGeSecondsWithDivisor(
       String serviceName,
       String spanName,
       String windowSeconds,
       String divisorSeconds,
-      Integer minRatePerSecond) {
+      String minRatePerSecond) {
     int resolvedWindowSeconds = parsePositiveInteger(windowSeconds, "windowSeconds");
     int resolvedDivisorSeconds = parsePositiveInteger(divisorSeconds, "divisorSeconds");
+    int resolvedMinRatePerSecond = parsePositiveInteger(minRatePerSecond, "minRatePerSecond");
     String rangeSelector = resolvedWindowSeconds + "s";
-    assertPrometheusRateGeInternal(serviceName, spanName, rangeSelector, resolvedDivisorSeconds, minRatePerSecond);
+    assertPrometheusRateGeInternal(
+        serviceName,
+        spanName,
+        rangeSelector,
+        resolvedDivisorSeconds,
+        resolvedMinRatePerSecond);
   }
 
+  /**
+   * Asserts the Prometheus error rate for one service/span combination.
+   *
+   * @param serviceName the Prometheus service label value
+   * @param spanName the Prometheus span label value
+   * @param rangeSelector the Prometheus lookback range selector
+   * @param maxErrorRatePercent the maximum allowed error rate in percent
+   */
   private void assertPrometheusErrorRateLeInternal(
       String serviceName,
       String spanName,
@@ -275,7 +451,12 @@ public class PerfSteps {
     String errorCountPromQl = "sum(increase(traces_span_metrics_duration_milliseconds_count{"
         + "service_name=\"" + resolvedServiceName + "\", "
         + "span_name=\"" + resolvedSpanName + "\", "
-        + "status_code=\"STATUS_CODE_ERROR\"}["
+        + "zeta_test_status_code=\"STATUS_CODE_ERROR\"}["
+        + rangeSelector + "]))";
+    String labeledCountPromQl = "sum(increase(traces_span_metrics_duration_milliseconds_count{"
+        + "service_name=\"" + resolvedServiceName + "\", "
+        + "span_name=\"" + resolvedSpanName + "\", "
+        + "zeta_test_status_code=~\".+\"}["
         + rangeSelector + "]))";
     String totalCountPromQl = "sum(increase(traces_span_metrics_duration_milliseconds_count{"
         + "service_name=\"" + resolvedServiceName + "\", "
@@ -284,6 +465,7 @@ public class PerfSteps {
 
     try {
       Double errorCount = queryPrometheusScalar(errorCountPromQl);
+      Double labeledCount = queryPrometheusScalar(labeledCountPromQl);
       Double totalCount = queryPrometheusScalar(totalCountPromQl);
 
       String totalCountText = totalCount == null ? "null" : String.format(Locale.ROOT, "%.1f", totalCount);
@@ -293,12 +475,32 @@ public class PerfSteps {
             "service=%s, span=%s, window=%s, totalCount=%s — no samples",
             resolvedServiceName, resolvedSpanName, rangeSelector, totalCountText);
         log.warn("[ASSERT PROMETHEUS ERROR RATE] {}", reportText);
-        SerenityReportUtils.addCustomData("Prometheus error rate", reportText);
+        ReportAttachments.addText("Prometheus error rate", reportText);
         var ex = new AssertionError(String.format(Locale.ROOT,
             "Prometheus error rate check has no samples for service=%s span=%s window=%s — "
                 + "verify span name and telemetry pipeline",
             resolvedServiceName, resolvedSpanName, rangeSelector));
         SoftAssertionsContext.recordSoftFailure(ex.getMessage(), ex);
+        return;
+      }
+
+      if (labeledCount == null || !Double.isFinite(labeledCount) || labeledCount <= 0) {
+        // zeta_test_status_code label is not set by this collector version for successful spans.
+        // Fall back to errorCount only: if no error spans exist either, treat as 0% error rate.
+        boolean noErrors = errorCount == null || !Double.isFinite(errorCount) || errorCount <= 0;
+        String reportText = String.format(Locale.ROOT,
+            "service=%s, span=%s, window=%s, totalCount=%s — no samples with label zeta_test_status_code, %s",
+            resolvedServiceName, resolvedSpanName, rangeSelector, totalCountText,
+            noErrors ? "errorCount=0 → PASS (0.00%)" : "errorCount=" + String.format(Locale.ROOT, "%.1f", errorCount) + " → FAIL");
+        log.warn("[ASSERT PROMETHEUS ERROR RATE] {}", reportText);
+        ReportAttachments.addText("Prometheus error rate", reportText);
+        if (!noErrors) {
+          var ex = new AssertionError(String.format(Locale.ROOT,
+              "Prometheus error rate check has error spans for service=%s span=%s window=%s "
+                  + "but no labeled total — cannot compute rate, treating as failure",
+              resolvedServiceName, resolvedSpanName, rangeSelector));
+          SoftAssertionsContext.recordSoftFailure(ex.getMessage(), ex);
+        }
         return;
       }
 
@@ -311,7 +513,7 @@ public class PerfSteps {
           "service=%s, span=%s, window=%s, errorCount=%s, totalCount=%s, errorRate=%s%%, threshold=%.1f%%%nquery=%s",
           resolvedServiceName, resolvedSpanName, rangeSelector, errorCountText, totalCountText, rateText, maxErrorRatePercent, errorCountPromQl);
       log.warn("[ASSERT PROMETHEUS ERROR RATE] {}", reportText);
-      SerenityReportUtils.addCustomData("Prometheus error rate", reportText);
+      ReportAttachments.addText("Prometheus error rate", reportText);
 
       if (errorRatePercent > maxErrorRatePercent) {
         var ex = new AssertionError(String.format(Locale.ROOT,
@@ -321,7 +523,7 @@ public class PerfSteps {
       } else {
         log.info("[ASSERT PROMETHEUS ERROR RATE] PASS errorRate={}% <= {}% for service={} span={}",
             rateText, maxErrorRatePercent, resolvedServiceName, resolvedSpanName);
-        SerenityReportUtils.addCustomData("Prometheus error rate check",
+        ReportAttachments.addText("Prometheus error rate check",
             String.format(Locale.ROOT, "PASS errorRate=%s%% <= %.1f%%", rateText, maxErrorRatePercent));
       }
     } catch (Exception e) {
@@ -329,6 +531,15 @@ public class PerfSteps {
     }
   }
 
+  /**
+   * Asserts the Prometheus request rate for one service/span combination.
+   *
+   * @param serviceName the Prometheus service label value
+   * @param spanName the Prometheus span label value
+   * @param rangeSelector the Prometheus lookback range selector
+   * @param divisorSeconds divisor used to normalize the count to requests per second
+   * @param minRatePerSecond the minimum expected rate in requests per second
+   */
   private void assertPrometheusRateGeInternal(
       String serviceName,
       String spanName,
@@ -361,7 +572,7 @@ public class PerfSteps {
           resolvedServiceName, resolvedSpanName, rangeSelector, countText, rateText, minRatePerSecond, ratePromQl);
 
       log.warn("[ASSERT PROMETHEUS RATE] {}", reportText);
-      SerenityReportUtils.addCustomData("Prometheus rate", reportText);
+      ReportAttachments.addText("Prometheus rate", reportText);
 
       if (ratePerSecond < minRatePerSecond) {
         var ex = new AssertionError(String.format(Locale.ROOT,
@@ -371,7 +582,7 @@ public class PerfSteps {
       } else {
         log.info("[ASSERT PROMETHEUS RATE] PASS rate={}/s >= {}/s for service={} span={}",
             rateText, minRatePerSecond, resolvedServiceName, resolvedSpanName);
-        SerenityReportUtils.addCustomData("Prometheus rate check",
+        ReportAttachments.addText("Prometheus rate check",
             String.format(Locale.ROOT, "PASS rate=%s/s >= %d/s", rateText, minRatePerSecond));
       }
     } catch (Exception e) {
@@ -379,6 +590,15 @@ public class PerfSteps {
     }
   }
 
+  /**
+   * Asserts one Prometheus histogram-derived latency metric for a service/span combination.
+   *
+   * @param serviceName the Prometheus service label value
+   * @param spanName the Prometheus span label value
+   * @param rangeSelector the Prometheus lookback range selector
+   * @param metric the metric to assert
+   * @param maxMs the maximum allowed latency in milliseconds
+   */
   private void assertPrometheusHistogramMetricLeInternal(
       String serviceName,
       String spanName,
@@ -405,7 +625,7 @@ public class PerfSteps {
           sampleCountText,
           countPromQl);
       log.warn("[ASSERT PROMETHEUS COUNT] {}", sampleCountReport);
-      SerenityReportUtils.addCustomData("Prometheus sample count", sampleCountReport);
+      ReportAttachments.addText("Prometheus sample count", sampleCountReport);
 
       if (sampleCountValue == null || !Double.isFinite(sampleCountValue) || sampleCountValue <= 0d) {
         var ex = new AssertionError(String.format(
@@ -436,7 +656,7 @@ public class PerfSteps {
           thresholdText,
           promQl);
       log.warn("[ASSERT PROMETHEUS] {}", reportText);
-      SerenityReportUtils.addCustomData("Prometheus metric", reportText);
+      ReportAttachments.addText("Prometheus metric", reportText);
 
       if (observedValue == null) {
         var ex = new AssertionError(String.format(
@@ -488,7 +708,20 @@ public class PerfSteps {
     }
   }
 
-  private String buildPrometheusHistogramQuery(String serviceName, String spanName, String rangeSelector, Metric metric) {
+  /**
+   * Builds a Prometheus histogram query for a latency metric.
+   *
+   * @param serviceName the Prometheus service label value
+   * @param spanName the Prometheus span label value
+   * @param rangeSelector the Prometheus lookback range selector
+   * @param metric the metric to query
+   * @return a PromQL scalar expression
+   */
+  private String buildPrometheusHistogramQuery(
+      String serviceName,
+      String spanName,
+      String rangeSelector,
+      Metric metric) {
     if (rangeSelector == null || rangeSelector.isBlank()) {
       throw new IllegalArgumentException("rangeSelector must not be blank");
     }
@@ -508,9 +741,120 @@ public class PerfSteps {
     };
   }
 
-  private String buildPrometheusHistogramCountQuery(String serviceName, String spanName, String rangeSelector) {
+  /**
+   * Builds a Prometheus histogram count query for a service/span combination.
+   *
+   * @param serviceName the Prometheus service label value
+   * @param spanName the Prometheus span label value
+   * @param rangeSelector the Prometheus lookback range selector
+   * @return a PromQL scalar expression
+   */
+  private String buildPrometheusHistogramCountQuery(
+      String serviceName,
+      String spanName,
+      String rangeSelector) {
     String matcher = buildPrometheusLabelMatcher(serviceName, spanName);
     return "sum(increase(traces_span_metrics_duration_milliseconds_count" + matcher + "[" + rangeSelector + "]))";
+  }
+
+  /**
+   * Builds a Prometheus histogram count query for a single service/span combination.
+   *
+   * @param serviceName the Prometheus service label value
+   * @param spanName the Prometheus span label value
+   * @param rangeSelector the Prometheus lookback range selector
+   * @param extraMatcher optional additional Prometheus label matcher
+   * @return a PromQL scalar expression
+   */
+  private String buildPrometheusHistogramCountQuery(
+      String serviceName,
+      String spanName,
+      String rangeSelector,
+      String extraMatcher) {
+    String matcher = buildPrometheusLabelMatcher(serviceName, spanName, extraMatcher);
+    return "sum(increase(traces_span_metrics_duration_milliseconds_count" + matcher + "[" + rangeSelector + "]))";
+  }
+
+  /**
+   * Builds a PromQL expression that sums span-metric counts across several span names.
+   *
+   * @param serviceName the resolved Prometheus service label value
+   * @param spanNames the resolved Prometheus span label values
+   * @param rangeSelector the Prometheus lookback range selector
+   * @param extraMatcher optional additional Prometheus label matcher
+   * @return a PromQL scalar expression
+   */
+  private String buildCombinedPrometheusCountQuery(
+      String serviceName,
+      List<String> spanNames,
+      String rangeSelector,
+      String extraMatcher) {
+    return spanNames.stream()
+        .map(span -> buildPrometheusHistogramCountQuery(
+            serviceName,
+            span,
+            rangeSelector,
+            extraMatcher))
+        .collect(Collectors.joining(" + ", "(", ")"));
+  }
+
+  /**
+   * Queries Prometheus counts for each span independently.
+   *
+   * <p>PromQL vector addition can drop the whole combined expression when one part has no series.
+   * Querying spans independently lets absent error-series count as zero without hiding errors from
+   * other spans.</p>
+   *
+   * @param serviceName the resolved Prometheus service label value
+   * @param spanNames the resolved Prometheus span label values
+   * @param rangeSelector the Prometheus lookback range selector
+   * @param extraMatcher optional additional Prometheus label matcher
+   * @return count values keyed by span name; missing Prometheus series are represented as
+   *     {@code null}
+   * @throws Exception when one Prometheus query fails
+   */
+  private Map<String, Double> queryPrometheusSpanCounts(
+      String serviceName,
+      List<String> spanNames,
+      String rangeSelector,
+      String extraMatcher) throws Exception {
+    Map<String, Double> counts = new HashMap<>();
+    for (String span : spanNames) {
+      String promQl = buildPrometheusHistogramCountQuery(
+          serviceName,
+          span,
+          rangeSelector,
+          extraMatcher);
+      counts.put(span, queryPrometheusScalar(promQl));
+    }
+    return counts;
+  }
+
+  /**
+   * Sums finite Prometheus count values, treating absent series as zero.
+   *
+   * @param counts count values keyed by span name
+   * @return finite sum of all count values
+   */
+  private double sumFiniteCounts(Map<String, Double> counts) {
+    return counts.values().stream()
+        .filter(value -> value != null && Double.isFinite(value))
+        .mapToDouble(Double::doubleValue)
+        .sum();
+  }
+
+  /**
+   * Formats a Prometheus count for diagnostic output.
+   *
+   * @param count count value, or {@code null} when Prometheus returned no series
+   * @param nullAsZero whether absent series should be displayed as zero
+   * @return formatted count
+   */
+  private String formatPrometheusCount(Double count, boolean nullAsZero) {
+    if (count == null || !Double.isFinite(count)) {
+      return nullAsZero ? "0.0" : "null";
+    }
+    return String.format(Locale.ROOT, "%.1f", count);
   }
 
   /**
@@ -549,6 +893,20 @@ public class PerfSteps {
   }
 
   /**
+   * Parses and resolves comma-separated Prometheus span names.
+   *
+   * @param spanNames comma-separated span name expression
+   * @return resolved non-empty span names
+   */
+  private List<String> parsePrometheusSpanNames(String spanNames) {
+    String resolvedSpanNames = TigerGlobalConfiguration.resolvePlaceholders(spanNames);
+    return Arrays.stream(resolvedSpanNames.split(","))
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .collect(Collectors.toList());
+  }
+
+  /**
    * Builds a Prometheus label matcher for service and span labels.
    *
    * @param serviceName the Prometheus service label value
@@ -556,12 +914,27 @@ public class PerfSteps {
    * @return a PromQL label matcher fragment or an empty string
    */
   private String buildPrometheusLabelMatcher(String serviceName, String spanName) {
+    return buildPrometheusLabelMatcher(serviceName, spanName, null);
+  }
+
+  /**
+   * Builds a Prometheus label matcher for service, span and optional extra labels.
+   *
+   * @param serviceName the Prometheus service label value
+   * @param spanName the Prometheus span label value
+   * @param extraMatcher optional preformatted Prometheus label matcher
+   * @return a PromQL label matcher fragment or an empty string
+   */
+  private String buildPrometheusLabelMatcher(String serviceName, String spanName, String extraMatcher) {
     List<String> labels = new ArrayList<>();
     if (serviceName != null && !serviceName.isBlank() && !"*".equals(serviceName.trim())) {
       labels.add("service_name=\"" + escapePrometheusLabelValue(serviceName.trim()) + "\"");
     }
     if (spanName != null && !spanName.isBlank() && !"*".equals(spanName.trim())) {
       labels.add("span_name=\"" + escapePrometheusLabelValue(spanName.trim()) + "\"");
+    }
+    if (extraMatcher != null && !extraMatcher.isBlank()) {
+      labels.add(extraMatcher.trim());
     }
     return labels.isEmpty() ? "" : "{" + String.join(", ", labels) + "}";
   }
@@ -648,6 +1021,12 @@ public class PerfSteps {
     return new String(bodyBytes, StandardCharsets.UTF_8);
   }
 
+  /**
+   * Formats a metric identifier for assertion messages.
+   *
+   * @param metric the metric to format
+   * @return a short metric name
+   */
   private String formatMetricName(Metric metric) {
     return switch (metric.type()) {
       case PERCENTILE -> "p" + Math.round(metric.percentile() * 100);

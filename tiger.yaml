@@ -9,7 +9,7 @@ lib:
 #  pauseExecutionTimeoutSeconds: 18000       # default is 18000 (5h) – max pause timeout in Workflow UI
   rbelAnsiColors: false                      # default is true – enables ANSI color output in logs
 #  rbelLogoFilePath: ""                      # default is empty – optional path to custom logo in reports
-#  rbelPathDebugging: false                  # default is false – enables detailed RBelPath debug output
+#  rbelPathDebugging: true                   # default is false – enables detailed RBelPath debug output
 #  runTestsOnStart: false                    # default is true – if false, discover tests only; start manually in UI
 #  startBrowser: true                        # default is true – opens Workflow UI in browser when started
 #  trafficVisualization: true                # default is false – enables sequence diagram in Workflow UI
@@ -23,7 +23,8 @@ rbel:                                       # default is 5 – request wait time
 logging:
   level:
     de.gematik.test.tiger: INFO
-    de.gematik.test.tiger.proxy: DEBUG
+    de.gematik.test.tiger.proxy: INFO
+    de.gematik.rbellogger: WARN
 
 servers:
   # Note that the zetaClient needs '/proxy/' as path before the correct path.
@@ -43,6 +44,8 @@ additionalConfigurationFiles:
   - filename: tiger/defaults.yaml
   - filename: tiger/paths.yaml
     baseKey: paths
+  - filename: tiger/body.yaml
+    baseKey: body
   - filename: tiger/headers.yaml
     baseKey: headers
   - filename: tiger/eRezeptTestData.yaml

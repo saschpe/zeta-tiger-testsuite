@@ -28,11 +28,12 @@
 @dev
 Funktionalität: Smoke Test
 
-  @no_proxy
-  @staging
   @A_26640
   @TA_A_26640_01
-  @smoke
+  @blocker
+  @critical
+  @no_proxy
+  @MASVS-NETWORK
   Szenariogrundriss: Einfache Ressource-Anfrage — Ein Client fordert die "Hello ZETA!" Resource vom Testfachdienst an
     Wenn TGR setze lokale Variable "anfrage" auf "<anfrage>"
     Und TGR gebe variable "anfrage" aus
@@ -51,11 +52,11 @@ Funktionalität: Smoke Test
       | zweite Anfrage |
       | dritte Anfrage |
 
-  @no_proxy
-  @dev
-  @deployment_modification
-  @smoke
   @Ignore
+  @blocker
+  @deployment_modification
+  @dev
+  @no_proxy
   Szenario: Einfache Ressource-Anfrage mit ASL — Ein Client fordert die "Hello ZETA!" Resource vom Testfachdienst an
     Wenn aktiviere den Additional Security Layer im Zeta Deployment
     Wenn TGR sende eine leere GET Anfrage an "${paths.client.reset}"
@@ -74,10 +75,10 @@ Funktionalität: Smoke Test
     Und deaktiviere den Additional Security Layer im Zeta Deployment
     Und TGR sende eine leere GET Anfrage an "${paths.client.reset}"
 
-  @dev
-  @deployment_modification
-  @smoke
   @Ignore
+  @blocker
+  @deployment_modification
+  @dev
   @popp_deployment_toggle
   Szenario: Einfache Ressource-Anfrage mit PoPP Toggle im Deployment
     Wenn TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
@@ -99,10 +100,10 @@ Funktionalität: Smoke Test
     Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.client.helloZetaPath}"
     Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "403"
 
-  @dev
-  @deployment_modification
-  @smoke
   @Ignore
+  @blocker
+  @deployment_modification
+  @dev
   @popp_deployment_toggle
   Szenario: Einfache Ressource-Anfrage mit PoPP Toggle und impliziter Wiederherstellung der Konfiguration
     Wenn TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
@@ -111,7 +112,7 @@ Funktionalität: Smoke Test
     Und TGR speichere Wert des Knotens "${headers.popp.body.insurerId}" der aktuellen Anfrage in der Variable "PoPP_INSURER_ID"
     Und TGR setze lokale Variable "PoPP_PRIVATE_KEY" auf "!{file('src/test/resources/keys/popp-token-foreign_ecKey.pem')}"
     Und TGR setze lokale Variable "pathCondition" auf ".*${paths.guard.helloZetaPath}"
-    Dann Setze im TigerProxy für JWT in "${headers.popp.root}" das Feld "body.insurerId" auf Wert "${PoPP_INSURER_ID}" mit privatem Schlüssel "${PoPP_PRIVATE_KEY}" für Pfad "${pathCondition}" und 2 Ausführungen und ersetze JWK
+    Dann Setze im TigerProxy für JWT in "${headers.popp.strict}" das Feld "body.insurerId" auf Wert "${PoPP_INSURER_ID}" mit privatem Schlüssel "${PoPP_PRIVATE_KEY}" für Pfad "${pathCondition}" und 2 Ausführungen und ersetze JWK
 
     Wenn TGR sende eine leere GET Anfrage an "${paths.client.reset}"
     Und TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"

@@ -26,6 +26,7 @@ package de.gematik.zeta.steps;
 
 import java.util.stream.Collectors;
 import net.serenitybdd.core.Serenity;
+import net.thucydides.core.steps.BaseStepListener;
 import net.thucydides.core.steps.StepEventBus;
 import net.thucydides.model.domain.TestResult;
 import org.assertj.core.api.SoftAssertions;
@@ -79,11 +80,10 @@ public final class SoftAssertionsContext {
           .map(String::trim)
           .collect(Collectors.joining("\n - ", "Soft assertions (non-blocking) failed:\n - ", ""));
 
+      recordReportDataIfAvailable("Soft assertion summary", summary);
+
       if (hasHardFailure()) {
-        Serenity.recordReportData()
-            .withTitle("Soft assertion summary")
-            .andContents(summary);
-        return;
+        appendSoftAssertionSummaryToCurrentOutcome(summary);
       }
 
       // Mark scenario as failed (not compromised) after all steps have run.
@@ -102,9 +102,7 @@ public final class SoftAssertionsContext {
   public static void recordSoftFailure(String description, Throwable cause) {
     var message = summarize(cause);
     softly().fail("%s: %s", description, message);
-    Serenity.recordReportData()
-        .withTitle("Soft assertion (non-blocking)")
-        .andContents(description + "\n" + message);
+    recordReportDataIfAvailable("Soft assertion (non-blocking)", description + "\n" + message);
   }
 
   /**
@@ -112,7 +110,7 @@ public final class SoftAssertionsContext {
    *
    */
   private static boolean hasHardFailure() {
-    var listener = StepEventBus.getEventBus().getBaseStepListener();
+    var listener = getBaseStepListener();
     if (listener == null) {
       return false;
     }
@@ -122,6 +120,60 @@ public final class SoftAssertionsContext {
     }
     var result = outcome.getResult();
     return result == TestResult.FAILURE || result == TestResult.ERROR;
+  }
+
+  /**
+   * Resolves the active Serenity base step listener when tests are running under Serenity.
+   *
+   * @return current Serenity listener or {@code null} when Serenity is not active
+   */
+  private static BaseStepListener getBaseStepListener() {
+    var eventBus = StepEventBus.getEventBus();
+    if (!eventBus.isBaseStepListenerRegistered()) {
+      return null;
+    }
+    return eventBus.getBaseStepListener();
+  }
+
+  /**
+   * Appends the soft-assertion summary to the current Serenity outcome when a hard failure already exists.
+   *
+   * @param summary aggregated soft-assertion summary
+   */
+  private static void appendSoftAssertionSummaryToCurrentOutcome(String summary) {
+    var listener = getBaseStepListener();
+    if (listener == null) {
+      return;
+    }
+    var outcome = listener.getCurrentTestOutcome();
+    if (outcome == null) {
+      return;
+    }
+
+    var existingMessage = outcome.getTestFailureMessage();
+    if (existingMessage == null || existingMessage.isBlank()) {
+      outcome.setTestFailureMessage(summary);
+      return;
+    }
+    if (existingMessage.contains(summary)) {
+      return;
+    }
+    outcome.setTestFailureMessage(existingMessage + System.lineSeparator() + System.lineSeparator() + summary);
+  }
+
+  /**
+   * Adds report data only when Serenity reporting is available in the current test runtime.
+   *
+   * @param title    report section title
+   * @param contents report section contents
+   */
+  private static void recordReportDataIfAvailable(String title, String contents) {
+    if (getBaseStepListener() == null) {
+      return;
+    }
+    Serenity.recordReportData()
+        .withTitle(title)
+        .andContents(contents);
   }
 
   /**

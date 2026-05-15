@@ -19,7 +19,7 @@ Ein MA einer LEI fordert eine Ressource über den ZETA Client an.
 
 | Kurzbeschreibung: |
 Der ZETA Client sendet eine Anfrage mit einem Access Token für eine geschützte Ressource an den PEP HTTP Proxy.
-Der PEP HTTP Proxy leitet die Anfrage an den Resource Server weiter, erhält jedoch eine Fehlerantwort mit ``ZETA-Cause: Proxy``. +
+Der PEP HTTP Proxy leitet die Anfrage an den Resource Server weiter, erhält jedoch eine Fehlerantwort mit ``zeta-cause: Proxy``. +
 Der PEP HTTP Proxy wertet dies als Fehler des HTTP Proxy, leitet die Antwort nicht an den Client weiter
 und antwortet mit ``500 Internal Server Error: Allgemeiner Serverfehler. Der Client sollte den Vorgang möglicherweise zu einem späteren Zeitpunkt wiederholen oder den Nutzer auf ein Problem auf dem Server hinweisen.``.
 Der ZETA Client informiert den MA und empfiehlt,
@@ -29,7 +29,7 @@ die Anfrage nach einer angemessenen Wartezeit erneut zu versuchen oder auf ein S
 Der ZETA Client ist registriert, authentisiert und autorisiert.
 
 | Nebenbedingung: |
-Der Resource Server liefert eine Fehlerantwort mit ``ZETA-Cause: Proxy``.
+Der Resource Server liefert eine Fehlerantwort mit ``zeta-cause: Proxy``.
 
 | Ablauf: |
 . MA startet den Abruf einer geschützten Ressource über den ZETA Client.
@@ -41,7 +41,7 @@ Der Resource Server liefert eine Fehlerantwort mit ``ZETA-Cause: Proxy``.
 . Der PEP HTTP Proxy prüft das *Access Token*.
 . Der PEP HTTP Proxy prüft den *DPoP Nachweis*.
 . Der PEP HTTP Proxy leitet die Anfrage an den Resource Server weiter.
-. Der Resource Server antwortet mit Fehlercode ``500 Internal Server Error``, einer Fehlerantwort und setzt ``ZETA-Cause: Proxy``.
+. Der Resource Server antwortet mit Fehlercode ``500 Internal Server Error``, einer Fehlerantwort und setzt ``zeta-cause: Proxy``.
 . Der PEP HTTP Proxy verwirft die Antwort vom Resource Server und antwortet mit ``500 Internal Server Error``.
 . Der ZETA Client weist auf einen allgemeinen Serverfehler hin und informiert den MA, dass der Vorgang möglicherweise zu einem späteren Zeitpunkt wiederholt werden sollte oder ein Problem auf dem Server vorliegt.
 
@@ -53,7 +53,7 @@ Der MA ist informiert und kann die Anfrage nach einer angemessenen Wartezeit ern
 * <<TA_A_26560_01>>
 * <<TA_A_26661_26>>
 * <<TA_A_26662_01>>
-* <<TA_A_26974-01_01>>
+* <<TA_A_26988_11>>
 * <<TA_A_27007_26>>
 |===
 
@@ -74,7 +74,7 @@ sequenceDiagram
     PEP-HP->>PEP-HP: Verifiziere Access Token
     PEP-HP->>PEP-HP: Verifiziere DPoP Nachweis
     PEP-HP->>+RS: Weiterleiten GET /resource
-    RS-->>-PEP-HP: Fehlerantwort<br>ZETA-Cause: Proxy
+    RS-->>-PEP-HP: Fehlerantwort<br>zeta-cause: Proxy
     PEP-HP-->>-ZC: 500 Internal Server Error
     ZC-->>-MA: Hinweis auf Serverfehler
 ....

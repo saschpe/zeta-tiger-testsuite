@@ -1,4 +1,0 @@
-[#TA_A_25645_01]
-===== TA_A_25645_01 - PDP Authentifizierung mittels TI-Smartcard
-
-Die Komponente Authorization Server MUSS die Authentifizierung per Token Exchange eines Access Tokens mit Signatur einer +++SM(C)-B+++ unterstützen.

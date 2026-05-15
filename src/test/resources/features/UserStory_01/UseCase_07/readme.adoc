@@ -25,7 +25,8 @@ Client ein Access Token vom PDP Authorization Server.
 Stationäre ZETA Clients verwenden dafür den Token Exchange Flow. +
 
 Der Token-Austausch mittels Software-Attestierung schlägt in diesem Use Case fehl (HTTP-Status-Code ``400``),
-aufgrund einer fehlerhaften JWT-Assertion (z.B. falsches Format oder fehlende Claims).
+wenn die JWT-Assertion fehlerhaft ist, z.B. durch ein falsches Format, fehlende Claims oder fehlende Attestierungsdaten in der ``client_assertion``.
+Dies umfasst auch den Fall, dass bei einer neuen Session nach Ablauf des Refresh Tokens die erneute Client-Attestierung im ``client_statement`` der ``client_assertion`` fehlt.
 
 | Vorbedingung: |
 Der stationäre ZETA Client ist bereits beim ZETA Guard registriert, d.h. es existiert bereits eine
@@ -75,6 +76,9 @@ Keine zusätzlichen Nebenbedingungen.
 (sig by Client_Instance_Private_Key)
 ----
 +
+Im Fehlerfall enthält die ``client_assertion`` keine verwertbare Software-Attestierung, weil die Attestierungsdaten im ``client_statement``
+fehlen, entfernt oder unvollständig sind.
+
 
 8. Der ZETA Client erstellt ein *SMC-B Access Token* (JWT).
 +
@@ -101,7 +105,7 @@ Keine zusätzlichen Nebenbedingungen.
 
 13. Der ZETA Client fügt die JWT-Signatur in das *SMC-B Access Token* ein.
 14. Der ZETA Client erstellt ein *DPoP Proof JWT* für den Token-Austausch.
-- *Das Token ist fehlerhaft*.
+- Die ``client_assertion`` oder das Token ist fehlerhaft.
 +
 .DPoP Proof JWT Claims (for Token Exchange):
 [source,json]
@@ -145,9 +149,15 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
 Der stationäre ZETA Client erhält kein Access-Token für den Zugriff auf die geschützte Ressource des Resource Servers.
 
 | Abgedeckte Testaspekte: |
-* <<TA_A_26661_01>>
-* <<TA_A_26662_01>>
+* <<TA_A_25644-01_03>>
+* <<TA_A_25644-01_05>>
+* <<TA_A_25649_01>>
+* <<TA_A_25767_02>>
+* <<TA_A_26661_02>>
 * <<TA_A_27007_02>>
+* <<TA_A_27802-02_01>>
+* <<TA_A_27802-02_02>>
+* <<TA_A_28963_01>>
 
 |===
 
@@ -201,7 +211,9 @@ sequenceDiagram
 [.lead]
 Feature-Datei zu diesem Use Case:
 
+ifdef::render_features[]
 [source]
 ----
-#include::Client_authentisierung_und_autorisierung_software_attest_SC_400.feature[]
+include::Client_authentisierung_und_autorisierung_software_attest_SC_400.feature[]
 ----
+endif::[]

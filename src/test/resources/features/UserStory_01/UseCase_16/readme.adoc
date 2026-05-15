@@ -42,9 +42,15 @@ Die vom ZETA Client verwendeten Token sind jedoch abgelaufen oder nicht mehr gü
 Der Ressourcenzugriff wurde abgewiesen. Der MA muss eine erneute Authentisierung durchführen.
 
 | Abgedeckte Testaspekte: |
+* <<TA_A_25663_01>>
 * <<TA_A_25733_02>>
+* <<TA_A_25767_02>>
 * <<TA_A_26661_01>>
+* <<TA_A_26661_19>>
 * <<TA_A_27007_19>>
+* <<TA_A_27802-02_01>>
+* <<TA_A_27802-02_02>>
+* <<TA_A_28963_01>>
 
 |===
 [#usecase_01_16_sequence]
@@ -70,5 +76,5 @@ Feature-Datei zu diesem Use Case:
 
 [source]
 ----
-// TODO: Feature-Datei wird ergänzt, sobald vorhanden
+include::client_ressource_anfrage_fachdienst_sc_401.feature[]
 ----

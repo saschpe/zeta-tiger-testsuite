@@ -1,0 +1,76 @@
+[#UC_01_28]
+== UseCase_01_28: Client authentisierung und autorisierung refresh token without attest SC 401
+
+.UseCase_01_28
+[cols="1,1a",options="autowidth"]
+|===
+| *Titel:* | Client authentisierung und autorisierung refresh token without attest SC 401
+
+| Akteur: |
+*MA einer LEI*
+
+| weitere Akteure: |
+- *ZETA Client*
+- *PDP Authorization Server*
+
+| Auslöser: |
+Ein MA einer LEI möchte auf einen Resource Server zugreifen.
+
+| Kurzbeschreibung: |
+Der ZETA Client versucht, ein Refresh Token mit einem DPoP Proof zu verwenden, der nicht zum DPoP-Key-Binding des Refresh Tokens passt.
+
+Der PDP Authorization Server erkennt, dass der beim Refresh Token Request verwendete DPoP Key nicht mit dem im Refresh Token gebundenen Key übereinstimmt, und lehnt den Token Request mit ``401 Unauthorized`` ab.
+
+| Vorbedingung: |
+Der ZETA Client verfügt über ein Refresh Token, das an einen bestimmten DPoP Key gebunden ist.
+
+| Nebenbedingung: |
+Der Request erfolgt am Token-Endpunkt mit ``grant_type=refresh_token``.
+Der DPoP Proof im Refresh Token Request wird mit einem anderen DPoP Key erstellt als dem Key, an den das Refresh Token gebunden ist.
+
+| Ablauf: |
+1. MA startet einen Zugriff auf den Resource Server über den ZETA Client.
+2. Der ZETA Client verfügt zunächst über ein gültiges Refresh Token mit DPoP-Key-Binding.
+3. Der Test erzeugt bzw. verwendet einen abweichenden DPoP Key.
+4. Der ZETA Client sendet einen Token Request mit ``grant_type=refresh_token``.
+5. Der Token Request enthält einen DPoP Proof, der nicht zum gebundenen Refresh Token passt.
+6. Der PDP Authorization Server validiert Refresh Token und DPoP Proof.
+7. Der PDP Authorization Server erkennt die abweichende DPoP-Key-Bindung.
+8. Der PDP Authorization Server lehnt den Token Request mit ``401 Unauthorized`` ab.
+9. Der PDP Authorization Server stellt keine neuen Tokens aus.
+
+| Nachbedingung: |
+Der ZETA Client erhält kein neues Access Token und kein neues Refresh Token.
+Das Refresh Token kann nicht mit einem fremden DPoP Key verwendet werden.
+
+| Abgedeckte Testaspekte: |
+* <<TA_A_25663_02>>
+
+|===
+
+[#usecase_01_28_sequence]
+[mermaid,usecase-01-28-sequence,svg]
+....
+sequenceDiagram
+    autonumber
+
+    actor MA as MA einer LEI
+    participant ZC as ZETA Client
+    participant PDP-AS as PDP Authorization<br>Server
+
+    MA->>+ZC: Starte Zugriff auf Resource Server
+    ZC->>+PDP-AS: POST /token grant_type=refresh_token<br>DPoP mit abweichendem Key
+    PDP-AS->>PDP-AS: Validiere Refresh Token und DPoP Proof
+    PDP-AS->>-ZC: 401 Unauthorized
+    ZC->>-MA: "Zugriff nicht gestattet"
+....
+
+ifdef::render_features[]
+[.lead]
+Feature-Datei zu diesem Use Case:
+
+[source]
+----
+include::client_authentisierung_und_autorisierung_refresh_token_without_attest_sc_401.feature[]
+----
+endif::[]

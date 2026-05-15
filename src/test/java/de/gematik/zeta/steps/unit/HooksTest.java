@@ -22,14 +22,16 @@
  * #L%
  */
 
-package de.gematik.zeta.steps;
+package de.gematik.zeta.steps.unit;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.sun.net.httpserver.HttpServer;
@@ -38,6 +40,9 @@ import de.gematik.test.tiger.common.config.TigerGlobalConfiguration;
 import de.gematik.zeta.services.TestDriverConfigurationService;
 import de.gematik.zeta.services.ZetaDeploymentConfigurationService;
 import de.gematik.zeta.services.model.CommandResult;
+import de.gematik.zeta.steps.Hooks;
+import de.gematik.zeta.steps.SoftAssertionsContext;
+import de.gematik.zeta.steps.TigerProxyManipulationsSteps;
 import io.cucumber.java.Scenario;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -45,7 +50,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.opentest4j.TestAbortedException;
 
 class HooksTest {
 
@@ -60,11 +67,12 @@ class HooksTest {
       tlsTestToolServiceServer.stop(0);
       tlsTestToolServiceServer = null;
     }
+    SoftAssertionsContext.reset();
+    Hooks.clearScenarioAborted();
   }
 
   /**
-   * Verifies that rollout cleanup restores the configured update tag when the original image
-   * differs from the expected target.
+   * Verifies that rollout cleanup restores the configured update tag when the original image differs from the expected target.
    */
   @Test
   void restorePepDeploymentImageEnsuresConfiguredUpdateTag() {
@@ -134,8 +142,7 @@ class HooksTest {
   }
 
   /**
-   * Verifies that the TLS client hooks configure the testdriver and reset it again after the
-   * scenario.
+   * Verifies that the TLS client hooks configure the testdriver and reset it again after the scenario.
    */
   @Test
   void rollbackTestdriverAfterTlsClientScenarioResetsAfterSuccessfulConfigure() {
@@ -146,7 +153,9 @@ class HooksTest {
     TigerGlobalConfiguration.putValue("tlsTestTool.serviceUrl", startTlsTestToolService(),
         ConfigurationValuePrecedence.TEST_CONTEXT);
     TigerGlobalConfiguration.putValue("tlsTestTool.caCertificatePath",
-        "tools/tls-test-tool-1.0.1/certificates/ecdsa/zeta-tls-test-tool-server_CA.cer",
+        "src/test/resources/tls-test-tool/certificates/ecdsa/zeta-tls-test-tool-server_CA.cer",
+        ConfigurationValuePrecedence.TEST_CONTEXT);
+    TigerGlobalConfiguration.putValue("tlsTestTool.clientDisableTlsVerification", "true",
         ConfigurationValuePrecedence.TEST_CONTEXT);
 
     var deploymentService = new FakeDeploymentConfigurationService();
@@ -162,6 +171,172 @@ class HooksTest {
     assertEquals(1, testDriverService.resetCount);
     assertEquals("https://zeta-tls-test-tool-server:4433", testDriverService.configuredResource);
     assertTrue(testDriverService.configuredCaCertificatePem.startsWith("-----BEGIN CERTIFICATE-----"));
+    assertTrue(testDriverService.configuredDisableTlsVerification);
+  }
+
+  /**
+   * Verifies that a failed TLS client post-hook reset is reported without failing the scenario.
+   */
+  @Test
+  void rollbackTestdriverAfterTlsClientScenarioLogsFailedResetWithoutThrowing() {
+    var testDriverService = new FakeTestDriverConfigurationService();
+    testDriverService.resetFailure = new AssertionError("reset unreachable");
+    var hooks = new Hooks(new FakeDeploymentConfigurationService(), new TigerProxyManipulationsSteps(),
+        testDriverService);
+    var scenario = mock(Scenario.class);
+    when(scenario.getSourceTagNames()).thenReturn(Set.of("@tls_client_fachdienst_hook"));
+    when(scenario.getName()).thenReturn("TLS Client Reset");
+
+    hooks.prepareSoftAssertions();
+
+    assertDoesNotThrow(() -> hooks.rollbackTestdriverAfterTlsClientScenario(scenario));
+    assertEquals(1, testDriverService.resetCount);
+    verify(scenario).log("TLS client post hook: could not reset the testdriver after scenario 'TLS Client Reset'.");
+  }
+
+  /**
+   * Verifies that after hooks do not execute cleanup work after a scenario was aborted in a before hook.
+   */
+  @Test
+  void restoreDeploymentModificationsDoesNothingAfterScenarioAbort() {
+    TigerGlobalConfiguration.putValue("allow_deployment_modification", "false",
+        ConfigurationValuePrecedence.TEST_CONTEXT);
+
+    var deploymentService = new FakeDeploymentConfigurationService();
+    var hooks = new Hooks(deploymentService, new TigerProxyManipulationsSteps(),
+        new FakeTestDriverConfigurationService());
+    var scenario = mock(Scenario.class);
+    when(scenario.getSourceTagNames()).thenReturn(Set.of("@deployment_modification"));
+
+    hooks.prepareSoftAssertions();
+
+    Assertions.assertThrows(TestAbortedException.class,
+        () -> hooks.verifyDeploymentModification(scenario));
+
+    assertDoesNotThrow(() -> hooks.restoreDeploymentModifications(scenario));
+    assertNull(deploymentService.cleanupExpectedImage);
+    assertNull(deploymentService.verifyExpectedImage);
+  }
+
+  /**
+   * Verifies that deferred soft assertion verification does not fail an already skipped scenario.
+   */
+  @Test
+  void verifySoftAssertionsDoesNothingAfterScenarioAbort() {
+    TigerGlobalConfiguration.putValue("allow_deployment_modification", "false",
+        ConfigurationValuePrecedence.TEST_CONTEXT);
+
+    var hooks = new Hooks(new FakeDeploymentConfigurationService(),
+        new TigerProxyManipulationsSteps(), new FakeTestDriverConfigurationService());
+    var scenario = mock(Scenario.class);
+    when(scenario.getSourceTagNames()).thenReturn(Set.of("@deployment_modification"));
+
+    hooks.prepareSoftAssertions();
+    SoftAssertionsContext.recordSoftFailure("pre-abort soft failure", new IllegalStateException("boom"));
+
+    Assertions.assertThrows(TestAbortedException.class,
+        () -> hooks.verifyDeploymentModification(scenario));
+
+    assertDoesNotThrow(hooks::verifySoftAssertions);
+  }
+
+  /**
+   * Verifies that performance scenarios are skipped unless they are enabled explicitly.
+   */
+  @Test
+  void skipPerformanceScenarioWhenNotEnabled() {
+    var hooks = new Hooks(new FakeDeploymentConfigurationService(),
+        new TigerProxyManipulationsSteps(), new FakeTestDriverConfigurationService());
+    var scenario = mock(Scenario.class);
+    when(scenario.getSourceTagNames()).thenReturn(Set.of("@performance"));
+
+    hooks.prepareSoftAssertions();
+
+    assertThrows(TestAbortedException.class, () -> hooks.skipPerformanceAndLongRunningScenarios(scenario));
+    verify(scenario).log("Skipping: performance scenarios require allow_performance_tests=true and scenario is tagged @performance");
+  }
+
+  /**
+   * Verifies that long-running scenarios are skipped unless they are enabled explicitly.
+   */
+  @Test
+  void skipLongRunningScenarioWhenNotEnabled() {
+    var hooks = new Hooks(new FakeDeploymentConfigurationService(),
+        new TigerProxyManipulationsSteps(), new FakeTestDriverConfigurationService());
+    var scenario = mock(Scenario.class);
+    when(scenario.getSourceTagNames()).thenReturn(Set.of("@longrunning"));
+
+    hooks.prepareSoftAssertions();
+
+    assertThrows(TestAbortedException.class, () -> hooks.skipPerformanceAndLongRunningScenarios(scenario));
+    verify(scenario).log("Skipping: long-running scenarios require allow_longrunning_tests=true and scenario is tagged @longrunning");
+  }
+
+  /**
+   * Verifies that explicitly enabled performance and long-running scenarios are not skipped by the guard.
+   */
+  @Test
+  void doNotSkipPerformanceOrLongRunningScenariosWhenEnabled() {
+    TigerGlobalConfiguration.putValue("allow_performance_tests", "true",
+        ConfigurationValuePrecedence.TEST_CONTEXT);
+    TigerGlobalConfiguration.putValue("allow_longrunning_tests", "true",
+        ConfigurationValuePrecedence.TEST_CONTEXT);
+
+    var hooks = new Hooks(new FakeDeploymentConfigurationService(),
+        new TigerProxyManipulationsSteps(), new FakeTestDriverConfigurationService());
+    var scenario = mock(Scenario.class);
+    when(scenario.getSourceTagNames()).thenReturn(Set.of("@performance", "@longrunning"));
+
+    hooks.prepareSoftAssertions();
+
+    assertDoesNotThrow(() -> hooks.skipPerformanceAndLongRunningScenarios(scenario));
+  }
+
+  /**
+   * Verifies that kubectl requirement failures abort the scenario as skipped instead of failing the before hook.
+   */
+  @Test
+  void skipIfKubectlMissingAbortsScenarioWhenRequirementCheckFails() {
+    TigerGlobalConfiguration.putValue("zetaDeploymentConfig.namespace", "zeta-staging",
+        ConfigurationValuePrecedence.TEST_CONTEXT);
+
+    var deploymentService = new FakeDeploymentConfigurationService();
+    deploymentService.requirementsFailure =
+        new AssertionError("Requirement check failed: cannot execute kubectl command.");
+    var hooks = new Hooks(deploymentService, new TigerProxyManipulationsSteps(),
+        new FakeTestDriverConfigurationService());
+    var scenario = mock(Scenario.class);
+    when(scenario.getSourceTagNames()).thenReturn(Set.of("@require_kubectl"));
+    when(scenario.getName()).thenReturn("Client Authentisierung");
+
+    hooks.prepareSoftAssertions();
+
+    assertThrows(TestAbortedException.class, () -> hooks.skipIfKubectlMissing(scenario));
+    verify(scenario).log("Skipping: kubectl requirement check failed and scenario is tagged @require_kubectl");
+  }
+
+  /**
+   * Verifies that deployment modification requirement failures abort the scenario as skipped instead of failing the before hook.
+   */
+  @Test
+  void verifyDeploymentModificationAbortsScenarioWhenRequirementCheckFails() {
+    TigerGlobalConfiguration.putValue("allow_deployment_modification", "true",
+        ConfigurationValuePrecedence.TEST_CONTEXT);
+    TigerGlobalConfiguration.putValue("zetaDeploymentConfig.namespace", "zeta-staging",
+        ConfigurationValuePrecedence.TEST_CONTEXT);
+
+    var deploymentService = new FakeDeploymentConfigurationService();
+    deploymentService.requirementsFailure =
+        new AssertionError("Requirement check failed: cannot execute kubectl command.");
+    var hooks = new Hooks(deploymentService, new TigerProxyManipulationsSteps(),
+        new FakeTestDriverConfigurationService());
+    var scenario = mock(Scenario.class);
+    when(scenario.getSourceTagNames()).thenReturn(Set.of("@deployment_modification"));
+
+    hooks.prepareSoftAssertions();
+
+    assertThrows(TestAbortedException.class, () -> hooks.verifyDeploymentModification(scenario));
+    verify(scenario).log("Skipping: verification check for deployment modification failed");
   }
 
   /**
@@ -189,22 +364,35 @@ class HooksTest {
 
   private static final class FakeDeploymentConfigurationService extends ZetaDeploymentConfigurationService {
 
-    private CommandResult imagePathResult =
+    private final CommandResult imagePathResult =
         new CommandResult(List.of("kubectl"), 0, "registry.example.org/zeta/ngx_pep", "");
+    private final CommandResult verifyResult =
+        new CommandResult(List.of("kubectl"), 0, "verify ok", "");
     private CommandResult currentImageReferenceResult =
         new CommandResult(List.of("kubectl"), 0, "registry.example.org/zeta/ngx_pep:0.3.0", "");
     private CommandResult cleanupResult =
         new CommandResult(List.of("kubectl"), 0, "cleanup ok", "");
-    private CommandResult verifyResult =
-        new CommandResult(List.of("kubectl"), 0, "verify ok", "");
     private String cleanupExpectedImage;
     private String verifyExpectedImage;
+    private AssertionError requirementsFailure;
 
     /**
      * Creates a fake deployment configuration service with short timeout values for tests.
      */
     private FakeDeploymentConfigurationService() {
       super(1, 1);
+    }
+
+    /**
+     * Throws the configured fake requirement failure when present.
+     *
+     * @param namespace namespace to validate
+     */
+    @Override
+    public void verifyRequirements(final String namespace) {
+      if (requirementsFailure != null) {
+        throw requirementsFailure;
+      }
     }
 
     /**
@@ -246,10 +434,11 @@ class HooksTest {
 
   private static final class FakeTestDriverConfigurationService extends TestDriverConfigurationService {
 
-    private boolean resetCalled;
     private int resetCount;
     private String configuredResource;
     private String configuredCaCertificatePem;
+    private boolean configuredDisableTlsVerification;
+    private AssertionError resetFailure;
 
     /**
      * Creates a fake testdriver configuration service backed by placeholder URLs.
@@ -263,17 +452,21 @@ class HooksTest {
      */
     @Override
     public void reset() {
-      resetCalled = true;
       resetCount++;
+      if (resetFailure != null) {
+        throw resetFailure;
+      }
     }
 
     /**
      * Records the configuration payload supplied by the TLS client hook.
      */
     @Override
-    public void configure(String resource, String caCertificatePem) {
+    public void configure(String resource, String caCertificatePem,
+        boolean clientDisableTlsVerification) {
       configuredResource = resource;
       configuredCaCertificatePem = caCertificatePem;
+      configuredDisableTlsVerification = clientDisableTlsVerification;
     }
   }
 }

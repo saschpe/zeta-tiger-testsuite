@@ -1,0 +1,4 @@
+[#TA_A_27016-01_08]
+===== TA_A_27016-01_08 - PoPP-Verifier - Warnung bei Nichterreichbarkeit des OCSP-Responders
+
+"Der PoPP-Verifier, der das Signaturzertifikat des PoPP-Token via TI-PKI prüft, MUSS dabei verifizieren, dass **bei Nichterreichbarkeit des OCSP-Responders eine Warnung an den Betreiber ausgelöst werden muss**, damit dieser einen Incident über das TI-ITSM eröffnen kann."

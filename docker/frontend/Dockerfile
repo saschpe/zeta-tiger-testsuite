@@ -1,6 +1,8 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+ARG CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX=docker.io
+
 # ---------- Build stage: warm up Maven repos & validate the project ----------
-FROM maven:3.9.12-eclipse-temurin-21-alpine AS build
+FROM ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/library/maven:3.9.12-eclipse-temurin-21-alpine@sha256:8b2f036477a5bc9fbeb16cfb7301c484d7fff727b1c4907301ac665526bd7a8e AS build
 
 WORKDIR /app
 ARG GITLAB_BASE_URL=https://gitlab.com
@@ -41,7 +43,7 @@ RUN --mount=type=secret,id=ci_job_token,required=false \
     . docker/build-common.sh && \
     tiger_export_ci_job_token && \
     mvn -s .m2/settings.xml -B -DskipTests=true -DskipITs=true \
-      -Dlicense.skip=true -Dcheckstyle.skip=true \
+      -Dlicense.skip=true -Dlicense.skipAddThirdParty=true -Dcheckstyle.skip=true \
       -Dmaven.repo.local=/tmp/.m2/repository \
       -Dtraceability.skip=true -Dtraceability.sync.skip=true -Dserenity.readme.sync.skip=true \
       verify
@@ -50,7 +52,7 @@ RUN . docker/build-common.sh && \
     tiger_verify_gitlab_testproxy_artifacts
 
 # ---------- Runtime stage: executes Maven with the warmed-up repository ----------
-FROM maven:3.9.12-eclipse-temurin-21-alpine AS execute-tests
+FROM ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/library/maven:3.9.12-eclipse-temurin-21-alpine@sha256:8b2f036477a5bc9fbeb16cfb7301c484d7fff727b1c4907301ac665526bd7a8e AS execute-tests
 
 WORKDIR /app
 ARG GITLAB_BASE_URL=https://gitlab.com
@@ -80,7 +82,7 @@ ENV ZETA_BASE_URL="" \
     OPENSEARCH_URL="" \
     ZETA_TEST_CERTIFICATES_DIR="" \
     PROFILE="" \
-    CUCUMBER_TAGS="@smoke" \
+    CUCUMBER_TAGS="" \
     SERENITY_EXPORT_DIR="" \
     CUCUMBER_EXPORT_DIR="" \
     ALLURE_RESULTS_DIR="" \

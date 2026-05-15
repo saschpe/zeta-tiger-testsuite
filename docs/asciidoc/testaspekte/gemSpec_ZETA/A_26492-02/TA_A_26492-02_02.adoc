@@ -2,4 +2,6 @@
 ===== TA_A_26492-02_02 - PEP HTTP Proxy - Weiterleitung von Client-Daten - Defaulteinstellung
 
 Die Komponente HTTP Proxy MUSS so konfiguriert werden können, dass pro Endpunkt des Resource Servers die Weiterleitung der Client-Daten durch den HTTP Proxy ein- und ausgeschaltet werden kann. **Die default-Einstellung ist keine Weiterleitung der Client-Daten.**
+
+Hinweis zur Testabdeckung: Dieser Testaspekt prüft am weitergeleiteten Request zum Resource Server, dass ohne aktivierte Endpunkt-Konfiguration keine Client-Daten weitergeleitet werden.
 **[<=]**

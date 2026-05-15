@@ -145,6 +145,8 @@ public final class TigerTestsuiteMain {
     setIfAbsent("PROFILE", env.get("PROFILE"));
     setIfAbsent("cucumber.filter.tags",
         firstNonEmpty(env.get("CUCUMBER_FILTER_TAGS"), env.get("CUCUMBER_TAGS")));
+    setIfAbsent("allow_performance_tests", env.get("ALLOW_PERFORMANCE_TESTS"));
+    setIfAbsent("allow_longrunning_tests", env.get("ALLOW_LONGRUNNING_TESTS"));
     setIfAbsent("tiger.testenv.cfgfile",
         firstNonEmpty(env.get("TIGER_TESTENV_CFGFILE"), existingTigerConfigPath()));
     setIfAbsent("serenity.outputDirectory",

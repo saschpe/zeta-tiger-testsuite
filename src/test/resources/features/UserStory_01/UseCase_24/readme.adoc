@@ -42,8 +42,10 @@ Die Nutzer haben die Ressourcen zeitnah erhalten. Als Statuscode kommt ``200 OK`
 
 | Abgedeckte Testaspekte: |
 * <<TA_A_26486-01_01>>
+* <<TA_A_26487_01>>
 * <<TA_A_26488_01>>
 * <<TA_A_26489-01_01>>
+* <<TA_A_26490_01>>
 * <<TA_A_26491_01>>
 * <<TA_A_26561_01>>
 * <<TA_A_26561_02>>

@@ -21,20 +21,27 @@
 - [Projektstruktur](#projektstruktur)
 - [Voraussetzungen](#voraussetzungen)
 - [Schnellstart](#schnellstart)
-- [Lizenz-Compliance (Third-Party)](#lizenz-compliance-third-party)
+- [Docker](#docker)
+- [Preflight-Checks und `.gitattributes`](#preflight-checks-und-gitattributes)
+- [Testzertifikate](#testzertifikate)
 - [Tiger-Konfigurationen](#tiger-konfigurationen)
-- [GitLab-Issue-Sync](#gitlab-issue-sync)
 - [Troubleshooting & Tipps](#troubleshooting--tipps)
-- [Wo TGR-Methoden dauerhaft ablegen](#wo-tgr-methoden-dauerhaft-ablegen)
 - [Dokumentation (AsciiDoc/Mermaid)](#dokumentation-asciidocmermaid)
+- [Lizenz-Compliance (Third-Party)](#lizenz-compliance-third-party)
 - [License](#license)
 
 ---
 
 ## Projektstruktur
 
-Dieses Repo enthält die Cucumber-Features, Tiger-Konfigurationen und optional kleine
-Glue/Hook-Klassen für die Testausführung.
+Dieses Repository enthält die Cucumber-Features, Tiger-Konfigurationen und ergänzende
+Testhilfen für die Testausführung.
+
+- `src/test/resources/features`: Gherkin-Features nach User Story und Use Case.
+- `src/test/java`: projektspezifische Step-Definitionen, Hooks und Hilfsklassen.
+- `tiger.yaml` plus `tiger/*.yaml`: zentrale Tiger-Konfigurationen.
+- `docs/`: Testplan, AsciiDoc-Quellen und generierte Referenztabellen.
+- `docker/`: Container-Builds und Laufzeitdokumentation.
 
 ---
 
@@ -43,15 +50,13 @@ Glue/Hook-Klassen für die Testausführung.
 - Java 21
 - Maven
 - IntelliJ mit Cucumber-Plugin
-- Optional: Apache JMeter 5.6.3 (abgelegt unter `tools/apache-jmeter-5.6.3`)
-- Optional: TLS Test Tool 1.0.1 (abgelegt unter `tools/tls-test-tool-1.0.1`)
-  Hint: Docker images include only the Alpine binary (`tools/tls-test-tool-1.0.1/TlsTestTool-alpine`).
+- TLS Test Tool Service für die TLS-UseCases.
+  Die zugehörigen Zertifikatsfixtures liegen unter `src/test/resources/tls-test-tool/certificates`.
 
-Zum Ausführen des Features ```Client_ressource_anfrage_fachdienst_SC_200``` ist die Beschaffung des
-Keykloak-Signaturschlüssels für die jeweilige Umgebung und die Ablage unter z.B.
-```src/test/resources/keys/zeta-kind.local.pem```
-```src/test/resources/mocks/jwt-sign-key.pem```
-notwendig.
+Zum Ausführen des Features `Client_ressource_anfrage_fachdienst_SC_200` ist die Beschaffung des
+Keycloak-Signaturschlüssels für die jeweilige Umgebung notwendig.
+Legen Sie ihn zum Beispiel unter `src/test/resources/keys/zeta-kind.local.pem` oder
+`src/test/resources/mocks/jwt-sign-key.pem` ab.
 
 ---
 
@@ -63,10 +68,10 @@ mvn verify
 
 # Ausführen von getaggten Scenarien mit Standalone Tiger Proxy via profile proxy
 # Optionen:
-# Smoke Tests         @smoke
-# Status ok           @staging
+# Smoke Tests         @blocker
+# Status ok           @critical
 # Status fail         @dev
-# Performance         @perf
+# Performance         @performance
 # AFO Aspects         @TA_A_xxxx
 mvn verify -Pproxy "-Dcucumber.filter.tags=@TA_A_25761_02 or @TA_A_27802_01"
 
@@ -87,12 +92,35 @@ Proxy-/WebSocket-Verbindungen in WSL nicht an einer IPv6-only `localhost`-Auflö
 Das Verhalten ist in `pom.xml` fest verdrahtet und gilt für alle Maven-Runs. Unter Windows hat
 die Einstellung in typischen IPv4/IPv6-Setups keinen negativen Einfluss.
 
-### Testzertifikate
+## Docker
+
+Alle Docker-Details zu Build, Run, CI und Variablen stehen in [docker/README.md](docker/README.md).
+Für Container-Läufe mit internen Laufzeit-Fehlerannotationen ist dort auch `ZETA_RUNTIME_FAILURE_ANNOTATIONS_CSV` dokumentiert.
+
+## Preflight-Checks und `.gitattributes`
+
+Die GitLab-Pipeline besitzt eine zusätzliche Stage `preflight`, in der der Job `utf8_posix_check`
+alle versionierten Dateien auf POSIX-kompatible Zeilenenden (LF) und gültiges UTF-8 prüft.
+Binäre Assets sowie `tools/` sind davon ausgenommen.
+Dadurch schlagen Merge Requests früh fehl, wenn versehentlich CRLF oder ISO-8859-1 eingecheckt würde.
+
+Die Datei [.gitattributes](.gitattributes) erzwingt dieselben Regeln lokal.
+Git liefert sämtliche Quelltexte als UTF-8 + LF aus und konvertiert nur Windows-Launcher
+(`*.bat`, `*.cmd`, `*.ps1`) zurück auf CRLF.
+Verlassen Sie sich daher auf `.gitattributes` anstatt auf `core.autocrlf`, besonders unter Windows.
+Falls der Preflight-Job Probleme meldet, führen Sie einmal `dos2unix <file>` aus, normalisieren Sie
+mit `git add --renormalize .` oder stellen Sie die Datei aus Git erneut her.
+
+## Testzertifikate
 
 Für Performance- und Setup-Szenarien kann die Testsuite Zertifikate aus dem separaten Repository `zeta-test-certificates` laden.
 Primär wird dafür `testCertificates.dir` in [tiger/defaults.yaml](tiger/defaults.yaml) verwendet.
 Der Default zeigt auf das Schwesterverzeichnis `../zeta-test-certificates`.
 Wenn sich der Ort des Zertifikats-Repositories ändert, können Sie `testCertificates.dir` anpassen.
+Für den Build des `quality_gate`-Docker-Images wird das Zertifikats-Repository zusätzlich unter `.cache/zeta-test-certificates` im Build-Kontext unterstützt.
+Dabei wird für das Image nur die Teilmenge `manifest/keystore-manifest.tsv` plus `keystores/` übernommen.
+In GitLab CI erfolgt der Checkout dafür per Sparse-Checkout, damit nur `manifest/` und `keystores/` aus dem Zertifikats-Repository geladen werden.
+Lokal können Sie dafür das vorhandene Checkout nach `.cache/zeta-test-certificates` klonen oder kopieren.
 Für CI oder abweichende Workspaces können Sie stattdessen explizit setzen:
 
 ```bash
@@ -164,54 +192,6 @@ Der TSV-Export ist für Tools wie JMeter gedacht.
 Er enthält absolute Dateipfade für Zertifikat, Private Key und Public Key sowie den inline aufgelösten Base64-Keystore.
 Die Inline-Werte der geladenen Zertifikate werden ebenfalls Base64-kodiert bereitgestellt, damit binäre DER-Dateien nicht als UTF-8 fehlinterpretiert werden.
 
----
-
-## Lizenz-Compliance (Third-Party)
-
-Die Testsuite prüft Third-Party-Lizenzen in `verify` automatisch über
-`org.codehaus.mojo:license-maven-plugin`.
-
-```bash
-mvn -DskipTests=true verify
-```
-
-Ergebnisdatei:
-
-- `target/generated-sources/license/THIRD-PARTY.txt`
-
-Konfiguration:
-
-- Denylist: `pom.xml` Property `license.denied.list`
-- Build-Abbruch bei fehlender/verbotener Lizenz: `failOnMissing=true`, `failOnBlacklist=true`
-
-Ausnahmen (nur nach Legal-Freigabe):
-
-- Datei: `src/license/override-THIRD-PARTY.properties`
-- Format: `<groupId>--<artifactId>--<version>=<Lizenzbezeichner>`
-- Für interne Freigaben SPDX-kompatibel als `LicenseRef-...` (z. B.
-  `LicenseRef-Approved-Dependency-Exception`) dokumentieren.
-- Pro neuer Ausnahme müssen Begründung, Reviewer und Datum in der MR-Beschreibung enthalten sein.
-
-### Ausführen über Docker
-
-Alle Docker-Details (Build, Run, CI, Variablen) stehen in [docker/README.md](docker/README.md).
-
-#### Preflight-Checks & `.gitattributes`
-
-Die GitLab-Pipeline besitzt eine zusätzliche Stage `preflight`, in der der Job `utf8_posix_check`
-alle versionierten Dateien auf POSIX-kompatible Zeilenenden (LF) und gültiges UTF-8 prüft (binäre
-Assets sowie `tools/` werden ausgenommen). Dadurch schlagen Merge-Requests früh fehl, wenn irgendwo
-versehentlich CRLF oder ISO-8859-1 eingecheckt würde.
-
-Die Datei [.gitattributes](.gitattributes) erzwingt dieselben Regeln lokal: Git liefert sämtliche
-Quelltexte als UTF-8 + LF aus und konvertiert nur Windows-Launcher (`*.bat`, `*.cmd`, `*.ps1`)
-zurück
-auf CRLF. Verlassen Sie sich daher auf `.gitattributes` anstatt `core.autocrlf`, besonders auf
-Windows. Falls der Preflight-Job Probleme meldet, führen Sie einmal `dos2unix <file>` (bzw. `git
-checkout -- <file>`) aus oder normalisieren Sie alles mit `git add --renormalize .`.
-
----
-
 ## Tiger-Konfigurationen
 
 Hinweis: Die Cucumber-Driver-Klassen werden durch das Tiger Maven Plugin mit dem Template
@@ -254,7 +234,7 @@ Ohne Angabe wird kein Proxy-Profil geladen.
 - Alle anderen Szenarien setzen einen konfigurierten Proxy voraus. Ist `PROFILE` nicht `proxy`,
   werden nicht getaggte Szenarien automatisch übersprungen.
 
-### KUBECTL Abfragen
+### `kubectl`-Abfragen
 
 - Szenarien, die `kubectl` und Zugriff auf den konfigurierten Kubernetes-Namespace benötigen,
   aber keine Modifikationen am Deployment vornehmen, mit `@require_kubectl` taggen.
@@ -301,48 +281,6 @@ um das Verhalten der Tiger-Laufzeit und der Workflow-UI zu steuern.
 * Eine vollständige Beschreibung aller Optionen befindet sich in der
   [Tiger-User-Manual-Dokumentation](https://gematik.github.io/app-Tiger/Tiger-User-Manual.html).
 
----
-
-## GitLab-Issue-Sync
-
-Für die Pflege von AFO- und Testaspekt-Issues gibt es ein Skript:
-
-- `docs/scripts/src/testsuite_docs/gitlab_issue_sync.py`: Erstellt fehlende AFO/TA-Issues, verlinkt sie, schließt TA-Issues mit
-  @TA_-Szenario-Tags, kommentiert Feature-Links und synchronisiert AFO-Issues (open/closed).
-
-Hinweise:
-
-- Zugriff per Token: `/tmp/gitlab_token`, `GITLAB_TOKEN` oder `CI_JOB_TOKEN` (nicht ins Repo committen).
-- Standardmäßig Dry-Run; Änderungen erst mit `--apply`.
-- GitLab.com unterstützt das Statusfeld „In progress/Done“ nicht per API-Update, daher nutzt der Workflow nur open/close.
-
-Beispiele:
-
-```bash
-# Dry-Run: prüfen, ob neue Issues angelegt würden
-uv run --project docs/scripts gitlab-issue-sync --token-file /tmp/gitlab_token --issue-state all
-
-# Voller Sync (inkl. Szenario-Tags), erst Dry-Run, dann Apply
-uv run --project docs/scripts gitlab-issue-sync --token-file /tmp/gitlab_token --issue-state all --process-mrs --include-mr-ta
-uv run --project docs/scripts gitlab-issue-sync --token-file /tmp/gitlab_token --issue-state all --process-mrs --include-mr-ta --apply
-
-```
-
----
-
-## Cucumber Methoden
-
-Die zentrale Referenz liegt in
-[98_cucumber_methods.adoc](docs/asciidoc/chapters/98_cucumber_methods.adoc).
-Dort werden deutsche ↔ englische Cucumber Methoden und Best-Practices dokumentiert.
-Die Tabelle der projektspezifischen Glue-Steps wird automatisch
-aus [cucumber_methods_table.adoc](docs/asciidoc/tables/generated/cucumber_methods_table.adoc) eingebunden,
-wobei diese per
-`uv run --project docs/scripts generate-cucumber-methods` erzeugt wird.
-
-
----
-
 ## Troubleshooting & Tipps
 
 * **Server not found**: Prüfen Sie `tiger.yaml` auf exakte Server-Keys und das Working Directory
@@ -356,44 +294,44 @@ wobei diese per
 * **Logs**: Tiger schreibt Server-Logs in `target/serverLogs/` (oder `build/`) — prüfen Sie diese
   regelmäßig.
 
----
-
-## Wo TGR-Methoden dauerhaft ablegen
-
-* `docs/tgr_methods.adoc` — kanonische Referenz (Pflicht).
-* Die Tabelle unter `docs/asciidoc/tables/generated/cucumber_methods_table.adoc` wird per
-  `uv run --project docs/scripts generate-cucumber-methods` generiert.
-* PR-Policy: Änderungen an TGR-Docs müssen im PR-Text begründet werden.
-
----
-
 ## Dokumentation (AsciiDoc/Mermaid)
 
-- Build (lokal):
-    - `mvn --batch-mode -Pgenerate-documentation -DskipTests=true generate-resources`
-    - Artefakte: `target/docs/html/Testplan_ZETA.html`, `target/docs/epub/Testplan_ZETA.epub`
-    - Die UV-Umgebung wird automatisch mit `uv sync` aktualisiert; mit
-      `-Dtraceability.sync.skip=true`
-      lässt sich der Schritt überspringen.
-- Inhaltliche Attribute wie `:toc:`, `:sectids:` etc. werden im `docs/asciidoc/Testplan_ZETA.adoc`
-  gepflegt (nicht im POM duplizieren).
-- Diagramme:
-    - Asciidoctor Diagram + Mermaid CLI via Node/Yarn (installiert in `target/node_modules`).
-    - Gemeinsamer Diagramm-Cache: `target/docs/diagram-cache` (verhindert Doppel-Rendering für
-      HTML/EPUB).
-    - Mermaid-Branding: `docs/asciidoc/mermaid-config.json` (einheitliche Farben/Fonts für
-      HTML/EPUB).
-- GitLab CI:
-    - Job `docs` erzeugt die HTML/EPUB-Dokumente mit Maven (kein separater Asciidoctor-Container
-      nötig).
-    - Pages veröffentlichen ausschließlich Serenity-Reports; Docs werden als Artefakte beigefügt.
+Die Testplan-Dokumentation wird über das Maven-Profil `generate-documentation` erzeugt.
 
-Tipps:
+- Lokale Generierung: `mvn -Pgenerate-documentation generate-resources`
+- Kompletter Build inklusive Paketierung: `mvn -Pgenerate-documentation -DskipTests package`
+- Artefakte: `target/docs/html/Testplan_ZETA.html` und `target/docs/epub/Testplan_ZETA.epub`
 
-- Falls HTML nur „diagram“ statt Bilder zeigt, prüfe, ob die generierten Diagrammdateien im gleichen
-  Ordner wie die HTML-Ausgabe liegen (`target/docs/html`).
-- Unter Windows wird `mmdc.cmd` verwendet; unter Linux/CI `mmdc`. Der POM kümmert sich um die
-  korrekten Pfade.
+Weiterführende Details liegen bewusst in den dedizierten Dokumentationen:
+
+- Überblick zur Doku-Struktur: [docs/README.md](docs/README.md)
+- UV-verwaltete Hilfsskripte für die Dokumentation: [docs/scripts/README.md](docs/scripts/README.md)
+
+## Lizenz-Compliance (Third-Party)
+
+Die Testsuite prüft Third-Party-Lizenzen in `verify` automatisch über
+`org.codehaus.mojo:license-maven-plugin`.
+
+```bash
+mvn -DskipTests=true verify
+```
+
+Ergebnisdatei:
+
+- `target/generated-sources/license/THIRD-PARTY.txt`
+
+Konfiguration:
+
+- Denylist: `pom.xml` Property `license.denied.list`
+- Build-Abbruch bei fehlender oder verbotener Lizenz: `failOnMissing=true`, `failOnBlacklist=true`
+
+Ausnahmen sind nur nach Legal-Freigabe zulässig:
+
+- Datei: `src/license/override-THIRD-PARTY.properties`
+- Format: `<groupId>--<artifactId>--<version>=<Lizenzbezeichner>`
+- Für interne Freigaben SPDX-kompatibel als `LicenseRef-...` dokumentieren, zum Beispiel
+  `LicenseRef-Approved-Dependency-Exception`.
+- Pro neuer Ausnahme müssen Begründung, Reviewer und Datum in der MR-Beschreibung enthalten sein.
 
 ## BSI TLS Test Tool Hinweis
 

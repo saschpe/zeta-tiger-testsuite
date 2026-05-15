@@ -9,13 +9,13 @@ Diese Boxen haben keine semantische Bedeutung.
 Sie dienen nur zur besseren Abgrenzung funktionaler Sequenzen.
 
 :leveloffset: +1
+
 include::UserStory_Smoke/readme.adoc[]
 
 include::UserStory_TLS/readme.adoc[]
 
 include::UserStory_Telemetrie/readme.adoc[]
 
-include::UserStory_Coverage/readme.adoc[]
-
 include::UserStory_01/readme.adoc[]
+
 :leveloffset: -1

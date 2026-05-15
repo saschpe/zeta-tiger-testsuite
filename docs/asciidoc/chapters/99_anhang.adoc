@@ -21,17 +21,20 @@ Für die Auswertung lädt die Testsuite diese Daten herunter und integriert sie 
 Zur besseren Lesbarkeit wurde der Tiger Proxy im Diagramm in mehrere Knoten aufgeteilt; im tatsächlichen Deployment existiert jedoch eine zentrale Tiger-Proxy-Instanz, über die der gesamte Verkehr geführt wird.
 
 [appendix]
-== Vorlagen
+== Vorlagen und Laufzeitberichte
 
 include::../../../src/test/resources/features/Use_Case_Template.adoc[]
 
-=== Testprotokoll-Vorlage
+=== Testprotokoll
 
-// TODO: Vorlage verlinken/einfügen
+Für jeden Testlauf erzeugt die Testsuite einen Serenity-Report im HTML-Format.
+Dieser Serenity-Report ist das Testprotokoll des jeweiligen Testlaufs.
+Er dokumentiert die ausgeführten Features, Szenarien und Schritte sowie deren Ergebnisstatus und die zugehörigen Laufzeitinformationen.
 
-=== Fehlerbericht-Vorlage
+=== Fehlerberichte
 
-// TODO: Vorlage verlinken/einfügen
+Fehlerberichte sind Bestandteil des Serenity-Reports: Fehlgeschlagene Szenarien und Schritte werden dort mit den zugehörigen fehlgeschlagenen Assertions, Fehlermeldungen und verfügbaren Detailinformationen ausgewiesen.
+Damit verweist der Fehlerbericht auf die konkrete Stelle im Testprotokoll, an der die Abweichung im Testlauf festgestellt wurde.
 
 [appendix]
 include::../afos/readme.adoc[]

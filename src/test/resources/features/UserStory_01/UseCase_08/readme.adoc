@@ -51,6 +51,8 @@ Der stationäre ZETA Client kann auf einen Resource Server zugreifen, d.h. diese
 * <<TA_A_25783-01_02>>
 * <<TA_A_27007_03>>
 * <<TA_A_26661_03>>
+* <<TA_A_27802-02_01>>
+* <<TA_A_27802-02_02>>
 
 |===
 

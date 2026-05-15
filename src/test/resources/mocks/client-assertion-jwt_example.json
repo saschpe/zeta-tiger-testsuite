@@ -1,13 +1,10 @@
 
 {
   "header": {
-    "typ": "jwt",
+    "typ": "JWT",
     "alg": "ES256",
     "jwk": {
-      "kid": "tXz0SP3vfu_KzENmVDbZNtcg5uP-ogpk_9QZT8dDe3o",
       "kty": "EC",
-      "alg": "ES256",
-      "use": "sig",
       "crv": "P-256",
       "x": "bN5XcNDtNxE_y_OYKuxg4VsncdZIGRsXxvKVoBTseuw",
       "y": "KnHyxGQqrng_2ocR13Ss-X7KoxyXS5xE-qXGdJ2zQp4"
@@ -20,7 +17,7 @@
       "https://zeta-kind.local/auth/realms/zeta-guard/protocol/openid-connect/token"
     ],
     "exp": 1764599351,
-    "jti": "[B@1f54480b",
+    "jti": "unique-jwt-id-lin-sw-101",
     "client_statement": {
       "sub": "b8e8899c-14e1-415f-b534-1448e8aa3b57",
       "platform": "linux",

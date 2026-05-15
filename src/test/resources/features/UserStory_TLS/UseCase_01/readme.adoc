@@ -38,10 +38,11 @@ Die TLS-Konformität des ZETA Guard Endpunkts ist verifiziert.
 * <<TA_GS-A_5526_01>>
 * <<TA_A_21275-01_01>>
 * <<TA_A_21275-01_03>>
-* <<TA_GS-A_4384-03_01>>
-* <<TA_GS-A_4384-03_02>>
-* <<TA_GS-A_4384-03_03>>
-* <<TA_GS-A_4384-03_04>>
+* <<TA_A_28868_01>>
+* <<TA_A_28868_02>>
+* <<TA_A_28868_03>>
+* <<TA_A_28868_04>>
+* <<TA_A_28868_05>>
 
 |===
 
@@ -56,20 +57,28 @@ include::tls_guard.feature[]
 endif::[]
 
 [.lead]
-Szenariohinweise zu elliptischen Kurven (`TA_GS-A_4384-03_03`)
+Szenariohinweise zu elliptischen Kurven (`TA_A_28868_02`)
 
 Für die Prüfung der unterstützten Kurven werden TLS-1.2-ClientHello-Nachrichten mit gezielt gesetzter `supported_groups`-Extension erzeugt.
 
 Es wird ein gemeinsamer Szenariogrundriss mit lesbaren Gruppenprofilen verwendet:
 
-* `p256_only` -> `P-256` (`secp256r1`, `0017`), Extension-Wert `000a000400020017`, Erwartung: Handshake erfolgreich, `Server-Key-Exchange` gesendet
-* `p384_only` -> `P-384` (`secp384r1`, `0018`), Extension-Wert `000a000400020018`, Erwartung: Handshake erfolgreich, `Server-Key-Exchange` gesendet
-* `unsupported_mix` -> `secp160r1`, `secp192r1`, `secp224r1`, `secp521r1`, `brainpoolP512r1`, `x25519`, `x448`, `ffdhe3072`, `ffdhe4096`, Extension-Wert `000a001400120010001300150019001c001d001e01010102`, Erwartung: Handshake nicht erfolgreich, `Server-Key-Exchange` nicht gesendet
+* `p256` -> Erwartung: Handshake erfolgreich, `Server-Key-Exchange` gesendet
+* `p384` -> Erwartung: Handshake erfolgreich, `Server-Key-Exchange` gesendet
+* `unsupported_mix` -> alle nach `TlsSupportedGroup.Tls12Policy` verbotenen Gruppen (`brainpoolP256r1tls13`, `brainpoolP384r1tls13`, `brainpoolP512r1tls13`, `secp192r1`, `secp224r1`, `secp521r1 (P-521)`, `secp256k1`, `x25519`, `x448`, `ffdhe2048`, `ffdhe3072`, `ffdhe4096`, `ffdhe6144`, `ffdhe8192`), Erwartung: Handshake nicht erfolgreich, `Server-Key-Exchange` nicht gesendet
 
-Für die Prüfung der verpflichtenden Ciphersuiten (`TA_GS-A_4384-03_02`) wird ebenfalls ein lesbares Ciphersuite-Profil verwendet:
+[.lead]
+Szenariohinweise zu Schlüssellängen und Domainparametern (`TA_A_28868_05`)
 
-* `ecdhe_rsa_aes_128_gcm_sha256` -> `TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256` -> `(0xC0,0x2F)` -> Erwartung: Handshake erfolgreich
-* `ecdhe_rsa_aes_256_gcm_sha384` -> `TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384` -> `(0xC0,0x30)` -> Erwartung: Handshake erfolgreich
+Für die Prüfung der empfohlenen Schlüssellängen und Domainparameter der ZETA-Guard-Instanz werden im erfolgreichen TLS-1.2-Handshake zwei Aspekte ausgewertet:
+
+* das vom Server gesendete Zertifikat muss eine EC-Kurve mit nach `TlsSupportedGroup.Tls12Policy` zulässiger Empfehlung verwenden
+* der im `ServerKeyExchange` verwendete ephemere ECDHE-Named-Group-Wert muss einer unterstützten Kurve entsprechen
+
+Für die Prüfung der verpflichtenden Ciphersuiten (`TA_A_28868_01`) wird ebenfalls ein lesbares Ciphersuite-Profil verwendet:
+
+* `ecdhe_ecdsa_aes_128_gcm_sha256` -> `TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256` -> `(0xC0,0x2B)` -> Erwartung: Handshake erfolgreich
+* `ecdhe_ecdsa_aes_256_gcm_sha384` -> `TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384` -> `(0xC0,0x2C)` -> Erwartung: Handshake erfolgreich
 
 [.lead]
 Hinweise zur Fehlersuche
@@ -82,3 +91,4 @@ Diese Zusammenfassung enthält unter anderem:
 * ausgewählte Cipher-Suite
 * ausgewählten TLS-1.2 Hash-Algorithmus (`selected_hash`, Format z. B. `SHA256(4/0x04)`)
 * ausgewählten TLS-1.2 Signatur-Algorithmus (`selected_signature`, Format z. B. `ECDSA(3/0x03)`)
+

@@ -37,14 +37,34 @@ containerName:
 service:
   ingress: 'nginx-ingress'
   egress: 'nginx-ingress' # same as ingress
-  httpProxy: 'unknown_service:nginx' # TODO: Service-Namen prüfen, warum wird Präfix unknown_service: verwendet
+  httpProxy: 'ZETA Guard PEP HTTP proxy'
   helperMetrics: 'metrics' # helper of httpProxy
   # pepDatabase: 'database-pep' # Dummy value, component not provided
-  authorizationServer: 'keycloak'
+  authorizationServer: 'ZETA Guard PDP authorization server'
   pdpDatabase: 'postgresql'
-  policyEngine: 'opa'
+  policyEngine: 'ZETA Guard PDP policy engine'
   notificationService: 'notification-service' # Dummy value, TODO: container not available yet, name not yet known
   # managementService: 'management-service' # Dummy value, component not provided
   telemetryDataService: 'telemetry-gateway'
   helperLogCollector: 'log-collector' # helper of telemetryDataService
   resourceServer: 'testfachdienst'
+
+# span_name label values for prometheus span metrics
+span:
+  httpProxy:
+    asl: '/ASL'
+    pep: '/pep/'
+    wellKnown: '/.well-known/'
+  authorizationServer:
+    nonce: 'NonceProvider.createNonce'
+    clientRegistration: 'POST /realms/{realm}/clients-registrations/{provider}'
+    token: 'POST /realms/{realm}/protocol/{protocol}/token'
+
+# comma-separated span_name groups for combined prometheus assertions
+spanGroup:
+  httpProxy:
+    pepAndWellKnown: '/pep/,/.well-known/'
+    aslPepAndWellKnown: '/ASL,/pep/,/.well-known/'
+  authorizationServer:
+    nonceAndToken: 'NonceProvider.createNonce,POST /realms/{realm}/protocol/{protocol}/token'
+    nonceRegisterAndToken: 'NonceProvider.createNonce,POST /realms/{realm}/clients-registrations/{provider},POST /realms/{realm}/protocol/{protocol}/token'

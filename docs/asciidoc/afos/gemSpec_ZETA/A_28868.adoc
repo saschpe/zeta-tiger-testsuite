@@ -1,0 +1,28 @@
+[#A_28868]
+==== A_28868 - TLS-Verbindung zwischen Zeta-Client und Zeta-Guard
+
+Ein Zeta-Client und eine Zeta-Guard-Instanz MÜSSEN in Bezug auf die TLS-Verbindung zwischen ihnen folgende Vorgaben umsetzen.
+
+  * bei Einsatz von TLS Version 1.2 MÜSSEN sie folgende Ciphersuiten unterstützen
+
+    * TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 (0xC0, 0x2C),
+    * TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 (0xC0, 0x2B).
+
+
+
+  * Sie KÖNNEN weitere Cipher-Suiten aus [TR-02102-2, Abschnitt 3.3.1.1 Tabelle 1] unterstützen.
+
+  * bei Einsatz von TLS Version 1.3 MÜSSEN sie folgende Ciphersuiten unterstützen
+
+    * TLS_AES_128_GCM_SHA256,
+    * TLS_AES_256_GCM_SHA384
+
+  * Sie KÖNNEN weitere Ciphersuiten aus [TR-02102-2, Abschnitt 3.3] unterstützen.
+
+  * Bei dem ephemeren Elliptic-Curve-Diffie-Hellman-Schlüsselaustausch und bei der Signaturprüfung mittels ECDSA MÜSSEN die Kurven P-256 oder P-384 [FIPS-186-5] unterstützt werden. Daneben KÖNNEN die Kurven brainpoolP256r1, brainpoolP384r1 oder brainpoolP512r1 (vgl. [RFC-5639] und [RFC-7027]) unterstützt werden. Andere Kurven SOLLEN NICHT verwendet werden.
+
+  * Alle verwendeten Schlüssellängen und Domainparameter (bspw. ECC-Kurven-Parameter) MÜSSEN nach [TR-02102-2, Abschnitt 3.6] empfohlen sein.
+
+
+
+[<=]

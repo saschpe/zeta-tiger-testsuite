@@ -3,80 +3,101 @@
 # Do not compose paths via concatenation like ${headers.dpop}.body.jti.
 
 authorization:
-  root: "$.header.['authorization']"
+  root: "$.header.Authorization"
+  lenient: "$.header.[~'Authorization']"
+  strict: "$.header.Authorization"
   dpopToken:
-    root: "$.header.['authorization'].DpopToken"
+    root: "$.header.[~'Authorization'].DpopToken"
     body:
-      sub: "$.header.['authorization'].DpopToken.body.sub"
-      common_name: "$.header.['authorization'].DpopToken.body.common_name"
-      profession_oid: "$.header.['authorization'].DpopToken.body.profession_oid"
-      client_id: "$.header.['authorization'].DpopToken.body.client_id"
-      organization_name: "$.header.['authorization'].DpopToken.body.organization_name"
-      cdat:
-        root: "$.header.['authorization'].DpopToken.body.cdat"
-        client_id: "$.header.['authorization'].DpopToken.body.cdat.client_id"
-      udat:
-        root: "$.header.['authorization'].DpopToken.body.udat"
-        telid: "$.header.['authorization'].DpopToken.body.udat.telid"
-        prof: "$.header.['authorization'].DpopToken.body.udat.prof"
-        commonName: "$.header.['authorization'].DpopToken.body.udat.commonName"
-        organizationName: "$.header.['authorization'].DpopToken.body.udat.organizationName"
+      sub: "$.header.[~'Authorization'].DpopToken.body.sub"
+      common_name: "$.header.[~'Authorization'].DpopToken.body.common_name"
+      profession_oid: "$.header.[~'Authorization'].DpopToken.body.profession_oid"
+      client_id: "$.header.[~'Authorization'].DpopToken.body.client_id"
+      organization_name: "$.header.[~'Authorization'].DpopToken.body.organization_name"
+      cnf:
+        root: "$.header.[~'Authorization'].DpopToken.body.cnf"
+        jkt: "$.header.[~'Authorization'].DpopToken.body.cnf.jkt"
+      product_id: "$.header.[~'Authorization'].DpopToken.body.product_id"
+      product_version: "$.header.[~'Authorization'].DpopToken.body.product_version"
 
 dpop:
-  root: "$.header.dpop"
+  root: "$.header.[~'DPoP']"
+  strict: "$.header.dpop"
   header:
-    root: "$.header.dpop.header"
-    typ: "$.header.dpop.header.typ"
-    alg: "$.header.dpop.header.alg"
+    root: "$.header.[~'DPoP'].header"
+    typ: "$.header.[~'DPoP'].header.typ"
+    alg: "$.header.[~'DPoP'].header.alg"
     jwk:
-      root: "$.header.dpop.header.jwk"
-      kty: "$.header.dpop.header.jwk.kty"
-      crv: "$.header.dpop.header.jwk.crv"
-      x: "$.header.dpop.header.jwk.x"
-      y: "$.header.dpop.header.jwk.y"
+      root: "$.header.[~'DPoP'].header.jwk"
+      kty: "$.header.[~'DPoP'].header.jwk.kty"
+      crv: "$.header.[~'DPoP'].header.jwk.crv"
+      x: "$.header.[~'DPoP'].header.jwk.x"
+      y: "$.header.[~'DPoP'].header.jwk.y"
+      d: "$.header.[~'DPoP'].header.jwk.d"
   body:
-    jti: "$.header.dpop.body.jti"
-    htm: "$.header.dpop.body.htm"
+    jti: "$.header.[~'DPoP'].body.jti"
+    htm: "$.header.[~'DPoP'].body.htm"
     htu:
-      root: "$.header.dpop.body.htu"
-      path: "$.header.dpop.body.htu.path"
-    iat: "$.header.dpop.body.iat"
-    nonce: "$.header.dpop.body.nonce"
-    ath: "$.header.dpop.body.ath"
+      root: "$.header.[~'DPoP'].body.htu"
+      path: "$.header.[~'DPoP'].body.htu.path"
+    iat: "$.header.[~'DPoP'].body.iat"
+    nonce: "$.header.[~'DPoP'].body.nonce"
+    ath: "$.header.[~'DPoP'].body.ath"
 
 popp:
-  root: "$.header.popp"
-  lineRegex: '(?m)^popp:\s*[^\n]*\n?'
+  root: "$.header.[~'PoPP']"
+  strict: "$.header.PoPP"
+  lineRegex: '(?im)^popp:[^\r\n]*\r?\n?'
   body:
-    root: "$.header.popp.body"
-    actorId: "$.header.popp.body.actorId"
-    insurerId: "$.header.popp.body.insurerId"
-    iat: "$.header.popp.body.iat"
-    patientProofTime: "$.header.popp.body.patientProofTime"
+    root: "$.header.[~'PoPP'].body"
+    actorId: "$.header.[~'PoPP'].body.actorId"
+    insurerId: "$.header.[~'PoPP'].body.insurerId"
+    iat: "$.header.[~'PoPP'].body.iat"
+    patientProofTime: "$.header.[~'PoPP'].body.patientProofTime"
 
 forwarded:
-  root: "$.header.forwarded"
-  xForwardedHost: "$.header.['x-forwarded-host']"
-  xForwardedProto: "$.header.['x-forwarded-proto']"
+  root: "$.header.[~'Forwarded']"
+  strict: "$.header.Forwarded"
+xForwardedHost: "$.header.[~'X-Forwarded-Host']"
+xForwardedProto: "$.header.[~'X-Forwarded-Proto']"
+xForwardedFor: "$.header.[~'X-Forwarded-For']"
+xRealIp: "$.header.[~'X-Real-IP']"
 
 zeta:
   userInfo:
-    root: "$.header.['zeta-user-info']"
+    root: "$.header.[~'zeta-user-info']"
+    strict: "$.header.['zeta-user-info']"
     decoded:
-      identifier: "$.header.['zeta-user-info'].decoded.identifier"
-      professionOid: "$.header.['zeta-user-info'].decoded.professionOID"
-  poppTokenContent: "$.header.['zeta-popp-token-content']"
-  clientData: "$.header.['zeta-client-data']"
-  clientDataDecodedClientId: "$.header.['zeta-client-data'].decoded.client_id"
-  apiVersion: "$.header.['zeta-api-version']"
-  cause: "$.header.['zeta-cause']"
+      root: "$.header.[~'zeta-user-info'].decoded"
+      identifier: "$.header.[~'zeta-user-info'].decoded.identifier"
+      professionOid: "$.header.[~'zeta-user-info'].decoded.professionOID"
+      commonName: "$.header.[~'zeta-user-info'].decoded.commonName"
+      organizationName: "$.header.[~'zeta-user-info'].decoded.organizationName"
+  poppTokenContent:
+    root: "$.header.[~'zeta-popp-token-content']"
+    strict: "$.header.['zeta-popp-token-content']"
+    decoded:
+      root: "$.header.[~'zeta-popp-token-content'].decoded"
+  clientData:
+    root: "$.header.[~'zeta-client-data']"
+    strict: "$.header.['zeta-client-data']"
+    decoded:
+      root: "$.header.[~'zeta-client-data'].decoded"
+      clientId: "$.header.[~'zeta-client-data'].decoded.client_id"
+      product_id: "$.header.[~'zeta-client-data'].decoded.product_id"
+      product_version: "$.header.[~'zeta-client-data'].decoded.product_version"
+  cause: "$.header.[~'zeta-cause']"
 
-cacheControl: "$.header.['cache-control']"
-contentType: "$.header.['content-type']"
-eTag: "$.header.etag"
-host: "$.header.host"
-ifNoneMatch: "$.header.['if-none-match']"
+cacheControl: "$.header.[~'Cache-Control']"
+contentType: "$.header.[~'Content-Type']"
+eTag:
+  lenient: "$.header.[~'ETag']"
+  strict: "$.header.etag"
+host: "$.header.[~'Host']"
+ifNoneMatch:
+  lenient: "$.header.[~'if-none-match']"
+  strict: "$.header.['if-none-match']"
 rateLimit:
-  limit: "$.header.['x-rate-limit-limit']"
-  remaining: "$.header.['x-rate-limit-remaining']"
-  reset: "$.header.['x-rate-limit-reset']"
+  limit: "$.header.[~'x-rate-limit-limit']"
+  remaining: "$.header.[~'x-rate-limit-remaining']"
+  reset: "$.header.[~'x-rate-limit-reset']"

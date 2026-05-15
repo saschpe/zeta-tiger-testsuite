@@ -39,9 +39,12 @@ class ZetaAfosTest(unittest.TestCase):
   def test_main_generates_filtered_requirements_and_updates_readme(self) -> None:
     with tempfile.TemporaryDirectory() as tmp_dir_name:
       tmp_dir = Path(tmp_dir_name)
-      input_xml = tmp_dir / "catalog.xml"
+      input_xml = tmp_dir / "gemVZ_Afo_ZETA_Guard_V_1.3.0-0_V1.0.0.xml"
       output_dir = tmp_dir / "generated"
       readme_path = tmp_dir / "readme.adoc"
+      references_path = tmp_dir / "02_referenzen.adoc"
+      introduction_path = tmp_dir / "03_einleitung.adoc"
+      zeta_guard_components_path = tmp_dir / "zeta_guard_komponenten.adoc"
 
       input_xml.write_text(
           """<catalog>
@@ -50,6 +53,16 @@ class ZetaAfosTest(unittest.TestCase):
       <denotation>Test-Spezifikation</denotation>
       <id>gemSpec_Test</id>
       <version>1.2.3</version>
+    </document>
+    <document>
+      <denotation>Spezifikation Zero Trust Access (ZETA)</denotation>
+      <id>gemSpec_ZETA</id>
+      <version>1.3.0</version>
+    </document>
+    <document>
+      <denotation>Übergreifende Spezifikation Verwendung kryptographischer Algorithmen in der Telematikinfrastruktur</denotation>
+      <id>gemSpec_Krypt</id>
+      <version>2.47.0</version>
     </document>
   </documents>
   <requirements>
@@ -84,10 +97,28 @@ bleibt erhalten
 """,
           encoding="utf-8",
       )
+      references_path.write_text(
+          "* {gemVZ_Afo_ZETA_Guard}[gemVZ_Afo_ZETA_Guard_V_1.2.1-0]: Version 1.0.0_CC\n",
+          encoding="utf-8",
+      )
+      introduction_path.write_text(
+          """-  https://old.example.invalid/["Verzeichnis von Anforderungen Prüfvorschrift Zero Trust Access (ZETA) Guard"]
+*gemVZ_Afo_ZETA_Guard_1.2.1-0_V1.0.0_CC*.
+""",
+          encoding="utf-8",
+      )
+      zeta_guard_components_path.write_text(
+          'Quelle: {gemSpec_ZETA}[gemSpec_ZETA], Abschnitt 3 "Einordnung in die TI 2.0",\n',
+          encoding="utf-8",
+      )
 
       stdout = io.StringIO()
-      with patch.object(zeta_afos, "ROOT_README", readme_path), redirect_stdout(
-          stdout):
+      with patch.object(zeta_afos, "ROOT_README", readme_path), patch.object(
+          zeta_afos, "REFERENCES_CHAPTER", references_path), patch.object(
+              zeta_afos, "INTRODUCTION_CHAPTER",
+              introduction_path), patch.object(
+                  zeta_afos, "ZETA_GUARD_COMPONENTS",
+                  zeta_guard_components_path), redirect_stdout(stdout):
         exit_code = zeta_afos.main([
             "--input-xml",
             str(input_xml),
@@ -122,6 +153,36 @@ bleibt erhalten
       self.assertIn("=== Bestehender Abschnitt", readme_content)
       self.assertNotIn("veralteter Inhalt", readme_content)
       self.assertNotIn("A_0002", readme_content)
+      self.assertIn(
+          "gemVZ_Afo_ZETA_Guard_V_1.3.0-0_V1.0.0/",
+          readme_content,
+      )
+      self.assertIn(
+          "Kurzbezeichnung: gemSpec_Krypt, Version: 2.47.0",
+          readme_content,
+      )
+
+      references_content = references_path.read_text(encoding="utf-8")
+      self.assertIn(
+          "* https://gemspec.gematik.de/docs/gemSpec/gemSpec_ZETA/gemSpec_ZETA_V1.3.0[Spezifikation Zero Trust Access (ZETA)]: Version 1.3.0",
+          references_content,
+      )
+      self.assertIn(
+          "* https://gemspec.gematik.de/docs/gemSpec/gemSpec_Krypt/gemSpec_Krypt_V2.47.0[Übergreifende Spezifikation Verwendung kryptographischer Algorithmen in der Telematikinfrastruktur]: Version 2.47.0",
+          references_content,
+      )
+      self.assertIn(
+          "* https://gemspec.gematik.de/docs/gemVZ/gemVZ_Afo_ZETA_Guard/gemVZ_Afo_ZETA_Guard_V_1.3.0-0_V1.0.0/[gemVZ_Afo_ZETA_Guard_V_1.3.0-0]: Version 1.0.0",
+          references_content,
+      )
+      self.assertIn(
+          "gemVZ_Afo_ZETA_Guard_V_1.3.0-0_V1.0.0",
+          introduction_path.read_text(encoding="utf-8"),
+      )
+      self.assertIn(
+          "https://gemspec.gematik.de/docs/gemSpec/gemSpec_ZETA/gemSpec_ZETA_V1.3.0",
+          zeta_guard_components_path.read_text(encoding="utf-8"),
+      )
 
   def test_main_smoke_runs_against_checked_in_xml_snapshot(self) -> None:
     repository_root = Path(__file__).resolve().parents[3]

@@ -28,6 +28,7 @@ import static io.restassured.RestAssured.given;
 
 import de.gematik.test.tiger.common.config.TigerGlobalConfiguration;
 import de.gematik.test.tiger.glue.HttpGlueCode;
+import de.gematik.test.tiger.lib.rbel.RbelMessageRetriever;
 import io.cucumber.java.de.Dann;
 import io.cucumber.java.en.Then;
 import io.restassured.http.ContentType;
@@ -36,9 +37,12 @@ import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.net.UnknownHostException;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
+import org.assertj.core.api.Assertions;
 import org.springframework.http.MediaType;
 
 /**
@@ -131,9 +135,9 @@ public class TigerProxyManipulationsSteps {
    * @param value   The new value to assign to the specified field
    */
   @Dann("Setze im TigerProxy für die Nachricht {tigerResolvedString} die Manipulation auf "
-      + "Feld {string} und Wert {tigerResolvedString}")
+      + "Feld {tigerResolvedString} und Wert {tigerResolvedString}")
   @Then("Set the manipulation in the TigerProxy for message {tigerResolvedString} to "
-      + "field {string} and value {tigerResolvedString}")
+      + "field {tigerResolvedString} and value {tigerResolvedString}")
   public void setTigerProxyManipulation(String message, String field, String value) {
     sendRbelManipulation(Map.of(
         "name", "modification" + random.nextInt(100),
@@ -154,9 +158,9 @@ public class TigerProxyManipulationsSteps {
    * @param executions Number of times to execute before auto-clearing
    */
   @Dann("Setze im TigerProxy für die Nachricht {tigerResolvedString} die Manipulation auf "
-      + "Feld {string} und Wert {tigerResolvedString} und {int} Ausführungen")
+      + "Feld {tigerResolvedString} und Wert {tigerResolvedString} und {int} Ausführungen")
   @Then("Set the manipulation in the TigerProxy for message {tigerResolvedString} to "
-      + "field {string} and value {tigerResolvedString} with {int} executions")
+      + "field {tigerResolvedString} and value {tigerResolvedString} with {int} executions")
   public void setTigerProxyManipulationWithExecutions(String message, String field, String value,
       Integer executions) {
     sendRbelManipulation(Map.of(
@@ -193,6 +197,141 @@ public class TigerProxyManipulationsSteps {
   }
 
   /**
+   * Replaces a raw HTTP header line in intercepted messages while preserving a valid line break.
+   *
+   * @param message logic to identify the messages that need to be manipulated
+   * @param headerName header name to replace, for example {@code DPoP}
+   * @param headerValue new header value without the {@code Header-Name: } prefix
+   */
+  @Dann("Ersetze im TigerProxy für die Nachricht {tigerResolvedString} den Header {string} durch Wert {tigerResolvedString}")
+  @Then("Replace in TigerProxy for message {tigerResolvedString} the header {string} with value {tigerResolvedString}")
+  public void replaceTigerProxyHeaderLine(String message, String headerName, String headerValue) {
+    applyTigerProxyHeaderLineManipulation(message, headerName, headerValue, false);
+  }
+
+  /**
+   * Duplicates a raw HTTP header line in intercepted messages to provoke duplicate-header checks.
+   *
+   * @param message logic to identify the messages that need to be manipulated
+   * @param headerName header name to duplicate, for example {@code DPoP}
+   * @param headerValue duplicated header value without the {@code Header-Name: } prefix
+   */
+  @Dann("Dupliziere im TigerProxy für die Nachricht {tigerResolvedString} den Header {string} mit Wert {tigerResolvedString}")
+  @Then("Duplicate in TigerProxy for message {tigerResolvedString} the header {string} with value {tigerResolvedString}")
+  public void duplicateTigerProxyHeaderLine(String message, String headerName, String headerValue) {
+    applyTigerProxyHeaderLineManipulation(message, headerName, headerValue, true);
+  }
+
+  /**
+   * Duplicates the existing raw HTTP header line in intercepted messages without changing its
+   * value.
+   *
+   * @param message logic to identify the messages that need to be manipulated
+   * @param headerName header name to duplicate, for example {@code DPoP}
+   */
+  @Dann("Dupliziere im TigerProxy für die Nachricht {tigerResolvedString} den Header {string}")
+  @Then("Duplicate in TigerProxy for message {tigerResolvedString} the header {string}")
+  public void duplicateTigerProxyExistingHeaderLine(String message, String headerName) {
+    var normalizedHeaderName = headerName == null ? "" : headerName.trim();
+    if (normalizedHeaderName.isEmpty()) {
+      throw new AssertionError("Header name for TigerProxy header manipulation must not be empty.");
+    }
+
+    var lineRegex = "(?im)^(" + Pattern.quote(normalizedHeaderName)
+        + "[\\t ]*:[^\\r\\n]*)(?:\\r?\\n)?";
+    sendRbelManipulation(Map.of(
+        "name", "header-line-duplication" + random.nextInt(1000),
+        "condition", message,
+        "targetElement", "$.header",
+        "regexFilter", lineRegex,
+        "replaceWith", "$1\r\n$1\r\n",
+        "deleteAfterNExecutions", 1));
+  }
+
+  /**
+   * Verifies how often a raw HTTP header line with a specific value occurs in the currently selected request.
+   *
+   * @param headerName          HTTP header name, matched case-insensitively
+   * @param headerValue         HTTP header value to count exactly after trimming line whitespace
+   * @param expectedOccurrences expected number of matching raw header lines
+   */
+  @Dann("prüfe aktuelle Anfrage enthält den Header {string} mit Wert {tigerResolvedString} {int} mal")
+  @Then("verify current request contains header {string} with value {tigerResolvedString} {int} times")
+  public void verifyCurrentRequestHeaderValueOccurrenceCount(String headerName, String headerValue,
+      int expectedOccurrences) {
+    var normalizedHeaderName = validateHeaderCountInput(headerName, expectedOccurrences);
+    var rawRequest = getCurrentRequestRawContent();
+
+    var normalizedHeaderValue = headerValue == null ? "" : headerValue.trim();
+    var headerLinePattern = Pattern.compile("(?im)^" + Pattern.quote(normalizedHeaderName)
+        + "[\\t ]*:[\\t ]*" + Pattern.quote(normalizedHeaderValue) + "[\\t ]*\\r?$");
+    var occurrences = headerLinePattern.matcher(rawRequest).results().count();
+
+    Assertions.assertThat(occurrences)
+        .as("Raw request header '%s' with expected value should occur %s times",
+            normalizedHeaderName, expectedOccurrences)
+        .isEqualTo(expectedOccurrences);
+  }
+
+  /**
+   * Verifies how often a raw HTTP header line occurs in the currently selected request.
+   *
+   * @param headerName          HTTP header name, matched case-insensitively
+   * @param expectedOccurrences expected number of matching raw header lines
+   */
+  @Dann("prüfe aktuelle Anfrage enthält den Header {string} {int} mal")
+  @Then("verify current request contains header {string} {int} times")
+  public void verifyCurrentRequestHeaderOccurrenceCount(String headerName,
+      int expectedOccurrences) {
+    var normalizedHeaderName = validateHeaderCountInput(headerName, expectedOccurrences);
+    var rawRequest = getCurrentRequestRawContent();
+    var headerLinePattern = Pattern.compile("(?im)^" + Pattern.quote(normalizedHeaderName)
+        + "[\\t ]*:[^\\r\\n]*\\r?$");
+    var occurrences = headerLinePattern.matcher(rawRequest).results().count();
+
+    Assertions.assertThat(occurrences)
+        .as("Raw request header '%s' should occur %s times",
+            normalizedHeaderName, expectedOccurrences)
+        .isEqualTo(expectedOccurrences);
+  }
+
+  /**
+   * Validates the expected header occurrence count input.
+   *
+   * @param headerName          HTTP header name to normalize
+   * @param expectedOccurrences expected number of matching raw header lines
+   * @return normalized header name
+   */
+  private String validateHeaderCountInput(String headerName, int expectedOccurrences) {
+    var normalizedHeaderName = headerName == null ? "" : headerName.trim();
+    if (normalizedHeaderName.isEmpty()) {
+      throw new AssertionError("Header name for current request header count must not be empty.");
+    }
+    if (expectedOccurrences < 0) {
+      throw new AssertionError("Expected header occurrence count must not be negative.");
+    }
+    return normalizedHeaderName;
+  }
+
+  /**
+   * Reads the raw HTTP content of the currently selected request.
+   *
+   * @return raw request content
+   */
+  private String getCurrentRequestRawContent() {
+    var currentRequest = RbelMessageRetriever.getInstance().getCurrentRequest();
+    if (currentRequest == null) {
+      throw new AssertionError("No current request message found.");
+    }
+
+    var rawRequest = currentRequest.getRawStringContent();
+    if (rawRequest == null) {
+      throw new AssertionError("Current request has no raw content.");
+    }
+    return rawRequest;
+  }
+
+  /**
    * Configures a JWT manipulation on the TigerProxy.
    *
    * @param jwtLocation   where the JWT is located (e.g., "$.header.dpop", "$.body.client_assertion")
@@ -200,9 +339,9 @@ public class TigerProxyManipulationsSteps {
    * @param value         new value for the field
    * @param privateKeyPem private key used to re-sign the token
    */
-  @Dann("Setze im TigerProxy für JWT in {string} das Feld {string} auf Wert {tigerResolvedString} "
+  @Dann("Setze im TigerProxy für JWT in {tigerResolvedString} das Feld {string} auf Wert {tigerResolvedString} "
       + "mit privatem Schlüssel {tigerResolvedString}")
-  @Then("Set in TigerProxy for JWT in {string} the field {string} to value {tigerResolvedString} "
+  @Then("Set in TigerProxy for JWT in {tigerResolvedString} the field {string} to value {tigerResolvedString} "
       + "using private key {tigerResolvedString}")
   public void setTigerProxyJwtManipulationWithKey(String jwtLocation, String jwtField, String value,
       String privateKeyPem) {
@@ -214,6 +353,44 @@ public class TigerProxyManipulationsSteps {
   }
 
   /**
+   * Applies a regex-based raw header manipulation for a single header line.
+   *
+   * @param message logic to identify the messages that need to be manipulated
+   * @param headerName header name to target
+   * @param headerValue replacement header value without the {@code Header-Name: } prefix
+   * @param duplicate whether the matching header line should be duplicated
+   */
+  private void applyTigerProxyHeaderLineManipulation(
+      String message, String headerName, String headerValue, boolean duplicate) {
+    var normalizedHeaderName = headerName == null ? "" : headerName.trim();
+    if (normalizedHeaderName.isEmpty()) {
+      throw new AssertionError("Header name for TigerProxy header manipulation must not be empty.");
+    }
+
+    if (!duplicate) {
+      sendRbelManipulation(Map.of(
+          "name", "header-value-modification" + random.nextInt(1000),
+          "condition", message,
+          "targetElement", "$.header." + normalizedHeaderName.toLowerCase(Locale.ROOT),
+          "replaceWith", headerValue,
+          "deleteAfterNExecutions", 1));
+      return;
+    }
+
+    var lineRegex = "(?im)^" + Pattern.quote(normalizedHeaderName) + ":[^\\r\\n]*\\r?\\n?";
+    var replacementLine = normalizedHeaderName + ": " + headerValue + "\r\n";
+    var replacement = duplicate ? replacementLine + replacementLine : replacementLine;
+
+    sendRbelManipulation(Map.of(
+        "name", "header-line-modification" + random.nextInt(1000),
+        "condition", message,
+        "targetElement", "$.header",
+        "regexFilter", lineRegex,
+        "replaceWith", replacement,
+        "deleteAfterNExecutions", 1));
+  }
+
+  /**
    * Configures a JWT manipulation on the TigerProxy with condition and execution limit, without re-signing.
    *
    * @param jwtLocation where the JWT is located (e.g., "$.header.dpop", "$.body.client_assertion")
@@ -222,9 +399,9 @@ public class TigerProxyManipulationsSteps {
    * @param condition   regex pattern to match request paths
    * @param executions  number of times to execute before auto-clearing (null = unlimited)
    */
-  @Dann("Setze im TigerProxy für JWT in {string} das Feld {string} auf Wert {tigerResolvedString} "
+  @Dann("Setze im TigerProxy für JWT in {tigerResolvedString} das Feld {string} auf Wert {tigerResolvedString} "
       + "für Pfad {tigerResolvedString} und {int} Ausführungen")
-  @Then("Set in TigerProxy for JWT in {string} the field {string} to value {tigerResolvedString} "
+  @Then("Set in TigerProxy for JWT in {tigerResolvedString} the field {string} to value {tigerResolvedString} "
       + "for path {tigerResolvedString} with {int} executions")
   public void setTigerProxyJwtManipulationWithConditionNoResign(String jwtLocation, String jwtField,
       String value, String condition, Integer executions) {
@@ -246,9 +423,9 @@ public class TigerProxyManipulationsSteps {
    * @param condition     regex pattern to match request paths
    * @param executions    number of times to execute before auto-clearing (null = unlimited)
    */
-  @Dann("Setze im TigerProxy für JWT in {string} das Feld {string} auf Wert {tigerResolvedString} "
+  @Dann("Setze im TigerProxy für JWT in {tigerResolvedString} das Feld {string} auf Wert {tigerResolvedString} "
       + "mit privatem Schlüssel {tigerResolvedString} für Pfad {tigerResolvedString} und {int} Ausführungen")
-  @Then("Set in TigerProxy for JWT in {string} the field {string} to value {tigerResolvedString} "
+  @Then("Set in TigerProxy for JWT in {tigerResolvedString} the field {string} to value {tigerResolvedString} "
       + "using private key {tigerResolvedString} for path {tigerResolvedString} with {int} executions")
   public void setTigerProxyJwtManipulationWithCondition(String jwtLocation, String jwtField,
       String value, String privateKeyPem, String condition, Integer executions) {
@@ -272,9 +449,9 @@ public class TigerProxyManipulationsSteps {
    * @param condition     regex pattern to match request paths
    * @param executions    number of times to execute before auto-clearing (null = unlimited)
    */
-  @Dann("Setze im TigerProxy für JWT in {string} das Feld {string} auf Wert {tigerResolvedString} "
+  @Dann("Setze im TigerProxy für JWT in {tigerResolvedString} das Feld {string} auf Wert {tigerResolvedString} "
       + "mit privatem Schlüssel {tigerResolvedString} für Pfad {tigerResolvedString} und {int} Ausführungen und ersetze JWK")
-  @Then("Set in TigerProxy for JWT in {string} the field {string} to value {tigerResolvedString} "
+  @Then("Set in TigerProxy for JWT in {tigerResolvedString} the field {string} to value {tigerResolvedString} "
       + "using private key {tigerResolvedString} for path {tigerResolvedString} with {int} executions and replace JWK")
   public void setTigerProxyJwtManipulationWithConditionAndReplaceJwk(String jwtLocation,
       String jwtField,

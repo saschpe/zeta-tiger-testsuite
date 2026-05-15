@@ -46,6 +46,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
+from ..masvs_tags import load_masvs_mapping
 from ..asciidoc_tables import (
   render_asciidoc_table_body,
   table_block_attributes,
@@ -95,7 +96,7 @@ REQUIREMENT_SPEC_SUBDIR = None
 REQ_TITLE_PATTERN = re.compile(
     r"^====\s+(?P<id>[A-Za-z0-9_\-]+)\s*-\s*(?P<title>.+?)\s*$")
 TA_TITLE_PATTERN = re.compile(
-    r"^=====\s+(?P<id>TA_[A-Z0-9_]+)\s*-\s*(?P<title>.+?)\s*$")
+    r"^=====\s+(?P<id>TA_[A-Za-z0-9_\-]+)\s*-\s*(?P<title>.+?)\s*$")
 ANCHOR_PATTERN = re.compile(r"^\[#(?P<anchor>[A-Za-z0-9_\-]+)]")
 FEATURE_NAME_PATTERN = re.compile(r"^Funktionalität:\s*(?P<name>.+?)\s*$",
                                   re.IGNORECASE)
@@ -103,28 +104,11 @@ SCENARIO_PATTERN = re.compile(
     r"^Szenario(?:grundriss)?(?::|\s+Outline:)\s*(?P<name>.+?)\s*$",
     re.IGNORECASE)
 TAG_PATTERN = re.compile(r"@([A-Za-z0-9_\-]+)")
-EXAMPLES_PATTERN = re.compile(r"^Beispiele(?::\s*(?P<label>.+))?\s*$",
+REQUIREMENT_TAG_CANDIDATE_PATTERN = re.compile(
+    r"^(?:[A-Z][A-Z0-9]*-)?A_\d+(?:-\d+)?$"
+    r"|^TIP\d+-A_\d+(?:-\d+)?$")
+EXAMPLES_PATTERN = re.compile(r"^Beispiele(?::\s*(?P<label>.*))?\s*$",
                                re.IGNORECASE)
-PRODUCT_NOT_IMPLEMENTED_TAGS = {
-  "product_not_impl",
-  "produkt_not_impl",
-  "not_impl",
-  "not_implemented",
-  "canary",
-}
-
-RISK_PRIORITY_DEFAULT_MINIMUM = {
-  "hoch": 3,
-  "mittel": 2,
-  "niedrig": 1,
-}
-
-RISK_PRIORITY_ALIASES = {
-  "high": "hoch",
-  "medium": "mittel",
-  "low": "niedrig",
-}
-
 
 def build_traceability(
     project_root: Optional[Path] = None,
@@ -181,6 +165,7 @@ def build_traceability(
   tables_generated_dir = tables_dir / "generated"
   tables_source_dir = tables_dir / "source"
   features_root = root / "src" / "test" / "resources" / "features"
+  masvs_mapping_path = docs_root / "masvs_mapping.csv"
   if write_outputs:
     diagrams_generated_dir.mkdir(parents=True, exist_ok=True)
     tables_generated_dir.mkdir(parents=True, exist_ok=True)
@@ -199,6 +184,11 @@ def build_traceability(
       features_root,
       user_story_anchors=user_story_anchors,
       use_case_anchors=use_case_anchors,
+      known_requirement_ids=set(requirements),
+      known_test_aspect_requirements={
+        ta_id: test_aspect.requirement_id
+        for ta_id, test_aspect in test_aspects.items()
+      },
   )
 
   records = _build_traceability_records(
@@ -239,19 +229,17 @@ def build_traceability(
   gap_summary_chart, gap_summary_table = _render_product_gap_summary(
       gap_summary)
   traceability_table = _render_traceability_matrix(records)
+  masvs_mapping = _load_masvs_mapping_if_present(masvs_mapping_path)
+  masvs_category_table, masvs_requirement_table, masvs_summary = _render_masvs_tables(
+      requirements=requirements,
+      scenarios=scenarios,
+      masvs_mapping=masvs_mapping,
+  )
   coverage_charts, coverage_summary = _render_coverage_charts(
       records, requirements, test_aspects
   )
-
-  risk_requirements_path = tables_source_dir / "bedrohungsanalyse_requirements.csv"
-  risk_requirements = _load_risk_requirements(risk_requirements_path)
-  risk_summary_table, risk_gaps_table, risk_coverage_summary = _render_risk_tables(
-      requirements=requirements,
-      test_aspects=test_aspects,
-      scenarios=scenarios,
-      risk_requirements=risk_requirements,
-  )
-  coverage_summary["bedrohungsanalyse"] = risk_coverage_summary
+  coverage_summary["product_gap"] = gap_summary
+  coverage_summary["masvs"] = masvs_summary
 
   traceability_links = [
     TraceabilityLink(
@@ -259,7 +247,6 @@ def build_traceability(
         test_aspect=record.test_aspect_id,
         use_case=record.use_case_id,
         implemented=record.implemented,
-        product_implemented=record.product_implemented,
         scenarios=sorted(record.scenario_names),
     )
     for record in records
@@ -298,10 +285,10 @@ def build_traceability(
                      gap_summary_table)
     _write_text_file(tables_generated_dir / "traceability_matrix.adoc",
                      traceability_table)
-    _write_text_file(tables_generated_dir / "bedrohungsanalyse_summary.adoc",
-                     risk_summary_table)
-    _write_text_file(tables_generated_dir / "bedrohungsanalyse_gaps.adoc",
-                     risk_gaps_table)
+    _write_text_file(tables_generated_dir / "masvs_coverage_by_category.adoc",
+                     masvs_category_table)
+    _write_text_file(tables_generated_dir / "masvs_coverage_by_requirement.adoc",
+                     masvs_requirement_table)
     _write_text_file(diagrams_generated_dir / "product-gap-summary.mmd",
                      gap_summary_chart)
     for filename, content in coverage_charts.items():
@@ -436,53 +423,13 @@ def _load_product_status(path: Path) -> Dict[str, Optional[str]]:
   return records
 
 
-def _load_risk_requirements(path: Path) -> List[Dict[str, object]]:
-  """Read Bedrohungsanalyse-prioritised requirements from CSV."""
-  if not path.exists():
-    LOGGER.info("Bedrohungsanalyse-Datei %s nicht gefunden", path)
-    return []
-
-  entries: List[Dict[str, object]] = []
-  try:
-    with path.open(encoding="utf-8", newline="") as handle:
-      reader = csv.DictReader(handle)
-      for row in reader:
-        requirement_id = (
-            row.get("Anforderung") or row.get("anforderung")
-            or row.get("requirement_id") or row.get("id") or "").strip()
-        if not requirement_id:
-          continue
-
-        rationale = (
-            row.get("Begründung") or row.get("begruendung")
-            or row.get("Rationale") or row.get("rationale") or "").strip()
-
-        raw_priority = (
-            row.get("Priorität") or row.get("Prioritaet") or row.get("priority")
-            or "").strip().lower()
-        raw_priority = RISK_PRIORITY_ALIASES.get(raw_priority, raw_priority)
-        priority = raw_priority if raw_priority in RISK_PRIORITY_DEFAULT_MINIMUM else "hoch"
-
-        entries.append({
-          "requirement_id": requirement_id,
-          "rationale": rationale,
-          "priority": priority,
-        })
-  except (OSError, csv.Error) as exc:
-    LOGGER.warning("Konnte Bedrohungsanalyse-Datei %s nicht laden: %s", path,
-                   exc)
-    return []
-
-  LOGGER.info("Bedrohungsanalyse aus %s geladen (%d Einträge)", path,
-              len(entries))
-  return entries
-
-
 def _parse_feature_files(
     features_root: Path,
     *,
     user_story_anchors: Dict[str, str],
     use_case_anchors: Dict[str, str],
+    known_requirement_ids: Set[str],
+    known_test_aspect_requirements: Dict[str, str],
 ) -> Tuple[Dict[str, UseCase], List[ScenarioCoverage]]:
   """Iterate over feature files and derive coverage information.
 
@@ -499,36 +446,23 @@ def _parse_feature_files(
   use_cases: Dict[str, UseCase] = {}
   scenarios: List[ScenarioCoverage] = []
 
-  def append_scenario_coverage(
+  def resolve_use_case_tags(tags: Set[str], feature_rel: Path) -> Set[str]:
+    use_case_tags = {tag for tag in tags if tag.startswith("UseCase")}
+    if use_case_tags:
+      return use_case_tags
+    inferred = _infer_use_case_from_path(feature_rel)
+    return {inferred} if inferred else set()
+
+  def register_use_cases(
       *,
-      scenario_name: str,
       tags: Set[str],
       feature_path: Path,
       feature_rel: Path,
       feature_name: Optional[str],
       user_story_id: str,
-  ) -> None:
-    product_implemented = not _has_not_implemented_tag(tags)
-
-    use_case_tags = {tag for tag in tags if tag.startswith("UseCase")}
-    if not use_case_tags:
-      inferred = _infer_use_case_from_path(feature_rel)
-      if inferred:
-        use_case_tags = {inferred}
-
-    test_aspect_tags = {tag for tag in tags if tag.startswith("TA_")}
-    requirement_tags = {tag for tag in tags if re.match(r"A_\d+", tag)}
-
-    if not use_case_tags:
-      LOGGER.debug(
-          "Skipping scenario without UseCase tag %s in %s",
-          scenario_name,
-          feature_rel,
-      )
-      return
-
+  ) -> Set[str]:
     anchor_ids = set()
-    for tag in use_case_tags:
+    for tag in resolve_use_case_tags(tags, feature_rel):
       anchor_id = use_case_anchors.get(tag, tag)
       anchor_ids.add(anchor_id)
       use_case = use_cases.setdefault(
@@ -542,6 +476,39 @@ def _parse_feature_files(
       )
       if feature_path not in use_case.feature_files:
         use_case.feature_files.append(feature_path)
+    return anchor_ids
+
+  def append_scenario_coverage(
+      *,
+      scenario_name: str,
+      tags: Set[str],
+      feature_path: Path,
+      feature_rel: Path,
+      feature_name: Optional[str],
+      user_story_id: str,
+  ) -> None:
+    anchor_ids = register_use_cases(
+        tags=tags,
+        feature_path=feature_path,
+        feature_rel=feature_rel,
+        feature_name=feature_name,
+        user_story_id=user_story_id,
+    )
+    if not anchor_ids:
+      LOGGER.debug(
+          "Skipping scenario without UseCase tag %s in %s",
+          scenario_name,
+          feature_rel,
+      )
+      return
+
+    requirement_tags, test_aspect_tags = _classify_traceability_tags(
+        tags=tags,
+        feature_rel=feature_rel,
+        scenario_name=scenario_name,
+        known_requirement_ids=known_requirement_ids,
+        known_test_aspect_requirements=known_test_aspect_requirements,
+    )
 
     scenarios.append(
         ScenarioCoverage(
@@ -550,7 +517,7 @@ def _parse_feature_files(
             use_cases=anchor_ids,
             test_aspects=test_aspect_tags,
             requirements=requirement_tags,
-            product_implemented=product_implemented,
+            masvs_tags={tag for tag in tags if tag.startswith("MASVS-")},
         )
     )
 
@@ -594,25 +561,13 @@ def _parse_feature_files(
         feature_name = feature_match.group("name").strip()
         feature_tags = set(pending_tags)
         pending_tags = []
-        use_case_tags = {tag for tag in feature_tags if
-                         tag.startswith("UseCase")}
-        if not use_case_tags:
-          inferred_use_case = _infer_use_case_from_path(feature_rel)
-          if inferred_use_case:
-            use_case_tags = {inferred_use_case}
-        for tag in use_case_tags:
-          anchor_id = use_case_anchors.get(tag, tag)
-          use_case = use_cases.setdefault(
-              anchor_id,
-              UseCase(
-                  tag_id=tag,
-                  anchor_id=anchor_id,
-                  title=feature_name or tag,
-                  user_story_id=user_story_id,
-              ),
-          )
-          if feature_path not in use_case.feature_files:
-            use_case.feature_files.append(feature_path)
+        register_use_cases(
+            tags=feature_tags,
+            feature_path=feature_path,
+            feature_rel=feature_rel,
+            feature_name=feature_name,
+            user_story_id=user_story_id,
+        )
         continue
 
       scenario_match = SCENARIO_PATTERN.match(stripped)
@@ -637,6 +592,8 @@ def _parse_feature_files(
       LOGGER.debug("Unconsumed tags at end of %s: %s", feature_rel,
                    pending_tags)
 
+  _warn_traceability_inconsistencies(
+      scenarios, features_root, known_test_aspect_requirements)
   return use_cases, scenarios
 
 
@@ -704,6 +661,84 @@ def collect_testaspect_tag_locations(
   }
 
 
+def _classify_traceability_tags(
+    *,
+    tags: Set[str],
+    feature_rel: Path,
+    scenario_name: str,
+    known_requirement_ids: Set[str],
+    known_test_aspect_requirements: Dict[str, str],
+) -> Tuple[Set[str], Set[str]]:
+  """Split scenario tags into known requirement and test-aspect references."""
+  requirement_tags = {tag for tag in tags if tag in known_requirement_ids}
+  test_aspect_tags = {
+    tag for tag in tags if tag in known_test_aspect_requirements
+  }
+
+  for tag in sorted(
+      tag for tag in tags
+      if tag.startswith("TA_") and tag not in known_test_aspect_requirements):
+    LOGGER.warning(
+        "Scenario %s in %s references unknown test aspect tag %s",
+        scenario_name,
+        feature_rel,
+        tag,
+    )
+  for tag in sorted(
+      tag for tag in tags if tag not in known_requirement_ids
+      and REQUIREMENT_TAG_CANDIDATE_PATTERN.match(tag)):
+    LOGGER.warning(
+        "Scenario %s in %s references unknown requirement tag %s",
+        scenario_name,
+        feature_rel,
+        tag,
+    )
+
+  return requirement_tags, test_aspect_tags
+
+
+def _warn_traceability_inconsistencies(
+    scenarios: Sequence[ScenarioCoverage],
+    features_root: Path,
+    known_test_aspect_requirements: Dict[str, str],
+) -> None:
+  """Warn about inconsistent requirement/test-aspect tagging."""
+  aggregated: Dict[Tuple[Path, str], Tuple[Set[str], Set[str]]] = {}
+  for scenario in scenarios:
+    key = (scenario.feature, scenario.scenario_name)
+    requirements, test_aspects = aggregated.setdefault(key, (set(), set()))
+    requirements.update(scenario.requirements)
+    test_aspects.update(scenario.test_aspects)
+
+  for (feature_path, scenario_name), (requirements, test_aspects) in sorted(
+      aggregated.items(), key=lambda item: (item[0][0].as_posix(), item[0][1])):
+    try:
+      feature_label = feature_path.relative_to(features_root)
+    except ValueError:
+      feature_label = feature_path
+    if requirements and not test_aspects:
+      LOGGER.warning(
+          "Scenario %s in %s references requirement tag(s) %s without a test aspect tag",
+          scenario_name,
+          feature_label,
+          ", ".join(sorted(requirements)),
+      )
+      continue
+    if requirements and test_aspects:
+      parent_requirements = {
+        known_test_aspect_requirements[tag] for tag in test_aspects
+      }
+      mismatched = requirements - parent_requirements
+      if mismatched:
+        LOGGER.warning(
+            "Scenario %s in %s has requirement tag(s) %s that do not match test aspect parent requirement(s) %s",
+            scenario_name,
+            feature_label,
+            ", ".join(sorted(mismatched)),
+            ", ".join(sorted(parent_requirements)),
+        )
+
+
 def _build_traceability_records(
     *,
     requirements: Dict[str, Requirement],
@@ -714,18 +749,12 @@ def _build_traceability_records(
   """Combine static metadata into traceability records."""
   ta_to_usecases: Dict[str, Set[str]] = defaultdict(set)
   ta_uc_to_scenarios: Dict[Tuple[str, str], Set[str]] = defaultdict(set)
-  ta_uc_product_flags: Dict[Tuple[str, str], bool] = {}
 
   for scenario in scenarios:
-    for ta in scenario.test_aspects or {""}:
-      if not ta:
-        continue
+    for ta in scenario.test_aspects:
       for uc in scenario.use_cases:
         ta_to_usecases[ta].add(uc)
         ta_uc_to_scenarios[(ta, uc)].add(scenario.scenario_name)
-        key = (ta, uc)
-        current = ta_uc_product_flags.get(key, True)
-        ta_uc_product_flags[key] = current and scenario.product_implemented
 
   records: List[TraceabilityRecord] = []
 
@@ -740,7 +769,6 @@ def _build_traceability_records(
               test_aspect_id=ta_id,
               use_case_id=None,
               implemented=False,
-              product_implemented=False,
               scenario_names=set(),
           )
       )
@@ -753,8 +781,6 @@ def _build_traceability_records(
               test_aspect_id=ta_id,
               use_case_id=use_case_id,
               implemented=True,
-              product_implemented=ta_uc_product_flags.get(
-                  (ta_id, use_case_id), True),
               scenario_names=ta_uc_to_scenarios.get((ta_id, use_case_id),
                                                     set()),
           )
@@ -901,17 +927,6 @@ def _render_traceability_matrix(records: Sequence[TraceabilityRecord]) -> str:
           test_aspect_groups[test_aspect_id],
           key=lambda rec: rec.use_case_id or "",
       )
-      if not entries_sorted:
-        entries_sorted = [
-            TraceabilityRecord(
-                requirement_id=requirement_id,
-                test_aspect_id=test_aspect_id,
-                use_case_id=None,
-                implemented=False,
-                product_implemented=False,
-                scenario_names=set(),
-          )
-        ]
       for entry in entries_sorted:
         use_case = _format_reference(
             entry.use_case_id) if entry.use_case_id else "keiner"
@@ -936,6 +951,134 @@ def _render_traceability_matrix(records: Sequence[TraceabilityRecord]) -> str:
       disclaimer=ASCIIDOC_DISCLAIMER,
       cols_directive="1,2,1,2",
   )
+
+
+def _load_masvs_mapping_if_present(path: Path) -> Dict[str, Set[str]]:
+  """Load the optional MASVS mapping CSV used for testplan projections."""
+  if not path.exists():
+    return {}
+  loaded = load_masvs_mapping(path)
+  return {requirement: set(tags) for requirement, tags in loaded.items()}
+
+
+def _render_masvs_tables(
+    *,
+    requirements: Dict[str, Requirement],
+    scenarios: Sequence[ScenarioCoverage],
+    masvs_mapping: Dict[str, Set[str]],
+) -> Tuple[str, str, Dict[str, int]]:
+  """Render MASVS coverage tables by category and requirement."""
+  scenario_rows: List[List[str]] = []
+  scenario_keys_seen: Set[Tuple[str, str, str, str, str]] = set()
+  covered_requirements: Set[str] = set()
+  categories_seen: Set[str] = set()
+
+  for scenario in scenarios:
+    masvs_tags = set(scenario.masvs_tags)
+    if not masvs_tags:
+      continue
+    use_cases = sorted(scenario.use_cases) or ["-"]
+    for masvs_tag in sorted(masvs_tags):
+      category = _format_masvs_category(masvs_tag)
+      categories_seen.add(masvs_tag)
+      requirement_ids = sorted(
+          requirement_id for requirement_id in scenario.requirements
+          if masvs_tag in _masvs_tags_for_requirement(requirement_id, masvs_mapping)
+      )
+      if not requirement_ids:
+        requirement_ids = sorted(scenario.requirements) or ["-"]
+      for requirement_id in requirement_ids:
+        if requirement_id != "-" and masvs_tag in _masvs_tags_for_requirement(
+            requirement_id, masvs_mapping):
+          covered_requirements.add(requirement_id)
+        key = (
+          masvs_tag,
+          requirement_id,
+          ", ".join(use_cases),
+          scenario.scenario_name,
+        )
+        if key in scenario_keys_seen:
+          continue
+        scenario_keys_seen.add(key)
+        scenario_rows.append([
+          category,
+          _format_reference(requirement_id) if requirement_id != "-" else "-",
+          ", ".join(_format_reference(use_case) for use_case in use_cases),
+          scenario.scenario_name,
+        ])
+
+  scenario_rows.sort(key=lambda row: (row[0], row[1], row[2], row[3]))
+  _suppress_repeated_cells(scenario_rows, (0, 1))
+  category_table = _write_asciidoc_table(
+      [
+        "MASVS-Kategorie",
+        "Anforderung",
+        "Use Case",
+        "Szenario",
+      ],
+      scenario_rows,
+      disclaimer=ASCIIDOC_DISCLAIMER,
+      cols_directive="1,1,1,4a",
+  )
+
+  requirement_rows: List[List[str]] = []
+  mapped_requirements = {
+    requirement_id: _masvs_tags_for_requirement(requirement_id, masvs_mapping)
+    for requirement_id in requirements
+  }
+  for requirement_id, masvs_tags in sorted(mapped_requirements.items()):
+    if not masvs_tags:
+      continue
+    linked_scenarios = sorted({
+      scenario.scenario_name
+      for scenario in scenarios
+      if requirement_id in scenario.requirements
+      and set(scenario.masvs_tags) & masvs_tags
+    })
+    requirement_rows.append([
+      _format_reference(requirement_id),
+      ", ".join(_format_masvs_category(tag) for tag in sorted(masvs_tags)),
+      str(len(linked_scenarios)),
+      _format_boolean(bool(linked_scenarios)),
+      ", ".join(linked_scenarios) if linked_scenarios else "-",
+    ])
+
+  requirement_table = _write_asciidoc_table(
+      [
+        "Anforderung",
+        "MASVS-Kategorie(n)",
+        "Szenarien",
+        "abgedeckt",
+        "Szenario-Nachweis",
+      ],
+      requirement_rows,
+      disclaimer=ASCIIDOC_DISCLAIMER,
+      cols_directive="1,2,1,1,4a",
+  )
+  summary = {
+    "categories": len(categories_seen),
+    "requirements": len(requirement_rows),
+    "covered_requirements": len(covered_requirements),
+    "scenario_links": len(scenario_rows),
+  }
+  return category_table, requirement_table, summary
+
+
+def _masvs_tags_for_requirement(
+    requirement_id: str,
+    masvs_mapping: Dict[str, Set[str]],
+) -> Set[str]:
+  """Return MASVS tags for a requirement, including base-id fallback."""
+  tags = set(masvs_mapping.get(requirement_id, set()))
+  base_requirement = re.sub(r"-\d+$", "", requirement_id)
+  if base_requirement != requirement_id:
+    tags.update(masvs_mapping.get(base_requirement, set()))
+  return tags
+
+
+def _format_masvs_category(masvs_tag: str) -> str:
+  """Render a MASVS tag as its category label."""
+  return masvs_tag.removeprefix("MASVS-")
 
 
 def _render_product_gap_summary(summary_counts: Dict[str, int]) -> Tuple[str,
@@ -1122,18 +1265,6 @@ def _story_key_from_path(relative_feature_path: Path) -> Optional[str]:
   return None
 
 
-def _has_product_implementation_tag(tags: Set[str]) -> bool:
-  """Backward compatibility shim for legacy product_impl tags."""
-  return any(tag.lower() in {"product_impl", "produkt_impl"} for tag in tags)
-
-
-def _has_not_implemented_tag(tags: Set[str]) -> bool:
-  """Detect whether a scenario/feature is flagged as not implemented in product."""
-  if _has_product_implementation_tag(tags):
-    return False
-  return any(tag.lower() in PRODUCT_NOT_IMPLEMENTED_TAGS for tag in tags)
-
-
 def _format_reference(identifier: Optional[str]) -> str:
   """Wrap identifiers as Asciidoc anchors when possible."""
   if not identifier:
@@ -1167,14 +1298,7 @@ def _format_optional_boolean(value: Optional[object]) -> str:
 
 def _format_coverage_progress(covered: int, total: int) -> str:
   """Render coverage as percentage with covered/total counts."""
-  if total <= 0:
-    percent = 0
-  else:
-    percent = int(round((covered / total) * 100))
-  if percent < 0:
-    percent = 0
-  if percent > 100:
-    percent = 100
+  percent = _percentage(covered, total)
   return f"{percent}% ({covered}/{total})"
 
 
@@ -1183,12 +1307,15 @@ def _format_ratio_percent(numerator: int, denominator: int) -> str:
   if denominator <= 0:
     return "0/0 (0%)"
   value = max(numerator, 0)
-  percent = int(round((value / denominator) * 100))
-  if percent < 0:
-    percent = 0
-  if percent > 100:
-    percent = 100
+  percent = _percentage(value, denominator)
   return f"{value}/{denominator} ({percent}%)"
+
+
+def _percentage(numerator: int, denominator: int) -> int:
+  """Return a rounded percentage clamped to 0..100."""
+  if denominator <= 0:
+    return 0
+  return max(0, min(100, int(round((numerator / denominator) * 100))))
 
 
 def _normalise_product_flag(raw_value: str) -> Optional[str]:
@@ -1203,45 +1330,6 @@ def _normalise_product_flag(raw_value: str) -> Optional[str]:
   if value in {"teilweise", "partial", "partially", "teilw."}:
     return "teilweise"
   return None
-
-
-def _combine_product_flags(
-    csv_flag: Optional[str],
-    scenario_flag: bool,
-) -> Optional[str]:
-  """Combine product info from CSV with scenario-level tags.
-
-  CSV feedback wins when present: explicit ``False`` stays ``False`` and
-  explicit ``True`` is refined by the scenario flag. When no CSV data exists
-  the scenario tag is used so product_not_impl markings still drive the column.
-  """
-  if csv_flag is None:
-    return "ja" if scenario_flag else "nein"
-  if csv_flag == "nein":
-    return "nein"
-  if csv_flag == "teilweise":
-    return "teilweise" if scenario_flag else "nein"
-  return "ja" if scenario_flag else "nein"
-
-
-def _merge_product_flags(
-    current: Optional[str],
-    incoming: Optional[str],
-) -> Optional[str]:
-  """Accumulate product flags across multiple records.
-
-  Unknown (``None``) never overrides existing values; otherwise we keep the
-  most conservative state (``nein`` < ``teilweise`` < ``ja``) to avoid claiming
-  product availability if any linked scenario indicates the opposite.
-  """
-  if incoming is None:
-    return current
-  if current is None:
-    return incoming
-  ordering = {"nein": 0, "teilweise": 1, "ja": 2}
-  current_score = ordering.get(current, 2)
-  incoming_score = ordering.get(incoming, 2)
-  return current if current_score <= incoming_score else incoming
 
 
 def _build_gap_entries(
@@ -1273,9 +1361,7 @@ def _build_gap_entries(
     tas_total = len(requirement_to_tas.get(requirement_id, set()))
     tas_covered = len(testsuite_coverage.get(requirement_id, set()))
 
-    if tas_total == 0:
-      coverage_label = "nein"
-    elif tas_covered == 0:
+    if tas_covered == 0:
       coverage_label = "nein"
     elif tas_covered < tas_total:
       coverage_label = "teilweise"
@@ -1395,12 +1481,7 @@ def _render_coverage_charts(
   requirement_summary["gesamt"] = sum(requirement_summary.values())
 
   total_test_aspects = len(test_aspects)
-  implemented_test_aspects = {
-    ta_id
-    for ta_id in test_aspects
-    if any(record.implemented for record in records if
-           record.test_aspect_id == ta_id)
-  }
+  implemented_test_aspects = covered_test_aspects & set(test_aspects)
   open_test_aspects = max(total_test_aspects - len(implemented_test_aspects), 0)
   test_aspect_summary = {
     "implementiert": len(implemented_test_aspects),
@@ -1471,222 +1552,6 @@ def _render_coverage_charts(
     "requirements_any_coverage": any_coverage_summary,
     "test_aspects": test_aspect_summary,
   }
-
-
-def _render_risk_tables(
-    *,
-    requirements: Dict[str, Requirement],
-    test_aspects: Dict[str, TestAspect],
-    scenarios: Sequence[ScenarioCoverage],
-    risk_requirements: Sequence[Dict[str, object]],
-) -> Tuple[str, str, Dict[str, int]]:
-  """Render Bedrohungsanalyse summary and open-gap tables."""
-  requirement_ta_scenarios = _collect_requirement_scenario_coverage(
-      scenarios, test_aspects)
-  summary_headers = [
-    "Nr.",
-    "Anforderung",
-    "Priorität",
-    "Erfüllung",
-    "Status",
-    "Begründung",
-  ]
-  gap_headers = [
-    "Nr.",
-    "Anforderung",
-    "Priorität",
-    "Offener Testaspekt",
-    "Ist/Soll",
-    "Fehlende Szenarien",
-  ]
-
-  if not risk_requirements:
-    empty_summary = _write_asciidoc_table_simple(
-        summary_headers,
-        [[
-          "-",
-          "-",
-          "-",
-          "0/0 (0%)",
-          "-",
-          "Keine Bedrohungsanalyse-Anforderungen hinterlegt",
-        ]],
-        disclaimer=ASCIIDOC_DISCLAIMER,
-        cols_directive="1,5,2,2,2,8",
-    )
-    empty_gaps = _write_asciidoc_table_simple(
-        gap_headers,
-        [[
-          "-",
-          "-",
-          "-",
-          "keine offenen Lücken",
-          "-",
-          "0",
-        ]],
-        disclaimer=ASCIIDOC_DISCLAIMER,
-        cols_directive="1,2,2,4,2,2",
-    )
-    return empty_summary, empty_gaps, {
-      "gesamt": 0,
-      "erfuellt": 0,
-      "nicht_erfuellt": 0,
-      "teilweise_erfuellt": 0,
-      "unbekannte_anforderung": 0,
-      "ohne_testaspekt": 0,
-      "ta_gesamt": 0,
-      "ta_erfuellt": 0,
-      "ta_offen": 0,
-    }
-
-  summary_rows: List[List[str]] = []
-  gap_rows: List[List[str]] = []
-  test_aspect_ids_by_requirement: Dict[str, List[str]] = defaultdict(list)
-  for test_aspect in test_aspects.values():
-    test_aspect_ids_by_requirement[test_aspect.requirement_id].append(
-        test_aspect.test_aspect_id)
-  for requirement_id in test_aspect_ids_by_requirement:
-    test_aspect_ids_by_requirement[requirement_id].sort()
-
-  summary = {
-    "gesamt": 0,
-    "erfuellt": 0,
-    "nicht_erfuellt": 0,
-    "teilweise_erfuellt": 0,
-    "unbekannte_anforderung": 0,
-    "ohne_testaspekt": 0,
-    "ta_gesamt": 0,
-    "ta_erfuellt": 0,
-    "ta_offen": 0,
-  }
-
-  for idx, entry in enumerate(risk_requirements, start=1):
-    requirement_id = str(entry.get("requirement_id", "")).strip()
-    priority = str(entry.get("priority", "hoch")).strip() or "hoch"
-    minimum_tests = RISK_PRIORITY_DEFAULT_MINIMUM.get(priority, 3)
-    rationale = str(entry.get("rationale", "")).strip()
-
-    if requirement_id not in requirements:
-      summary["gesamt"] += 1
-      summary["unbekannte_anforderung"] += 1
-      summary_rows.append([
-        str(idx),
-        _format_reference(requirement_id),
-        priority,
-        "0/0 (0%)",
-        "Anforderung unbekannt",
-        rationale or "-",
-      ])
-      gap_rows.append([
-        str(idx),
-        _format_reference(requirement_id),
-        priority,
-        "Anforderung unbekannt",
-        "0/0 (0%)",
-        "0",
-      ])
-      continue
-
-    ta_ids = test_aspect_ids_by_requirement.get(requirement_id, [])
-    if not ta_ids:
-      summary["gesamt"] += 1
-      summary["ohne_testaspekt"] += 1
-      summary["nicht_erfuellt"] += 1
-      summary_rows.append([
-        str(idx),
-        _format_reference(requirement_id),
-        priority,
-        "0/0 (0%)",
-        "nicht erfüllt",
-        rationale or "-",
-      ])
-      gap_rows.append([
-        str(idx),
-        _format_reference(requirement_id),
-        priority,
-        "kein Testaspekt",
-        "0/0 (0%)",
-        str(minimum_tests),
-      ])
-      continue
-
-    fulfilled_tas = 0
-    for ta_id in ta_ids:
-      covered_scenarios = len(
-          requirement_ta_scenarios.get(requirement_id, {}).get(ta_id, set()))
-      summary["ta_gesamt"] += 1
-      if covered_scenarios >= minimum_tests:
-        fulfilled_tas += 1
-        summary["ta_erfuellt"] += 1
-      else:
-        summary["ta_offen"] += 1
-        gap_rows.append([
-          str(idx),
-          _format_reference(requirement_id),
-          priority,
-          _format_reference(ta_id),
-          _format_ratio_percent(covered_scenarios, minimum_tests),
-          str(max(minimum_tests - covered_scenarios, 0)),
-        ])
-
-    summary["gesamt"] += 1
-    total_tas = len(ta_ids)
-    if fulfilled_tas == total_tas:
-      req_status = "erfüllt"
-      summary["erfuellt"] += 1
-    elif fulfilled_tas == 0:
-      req_status = "nicht erfüllt"
-      summary["nicht_erfuellt"] += 1
-    else:
-      req_status = "teilweise erfüllt"
-      summary["teilweise_erfuellt"] += 1
-
-    summary_rows.append([
-      str(idx),
-      _format_reference(requirement_id),
-      priority,
-      _format_ratio_percent(fulfilled_tas, total_tas),
-      req_status,
-      rationale or "-",
-    ])
-
-  summary_table = _write_asciidoc_table_simple(
-      summary_headers,
-      summary_rows,
-      disclaimer=ASCIIDOC_DISCLAIMER,
-      cols_directive="1,5,2,2,2,8",
-  )
-  _suppress_repeated_cells(gap_rows, (0, 1))
-  gaps_table = _write_asciidoc_table_simple(
-      gap_headers,
-      gap_rows,
-      disclaimer=ASCIIDOC_DISCLAIMER,
-      cols_directive="1,2,2,4,2,2",
-  )
-  return summary_table, gaps_table, summary
-
-
-def _collect_requirement_scenario_coverage(
-    scenarios: Sequence[ScenarioCoverage],
-    test_aspects: Dict[str, TestAspect],
-) -> Dict[str, Dict[str, Set[Tuple[Path, str]]]]:
-  """Aggregate unique scenario coverage per requirement and per test aspect."""
-  ta_to_requirement = {
-    ta_id: test_aspect.requirement_id
-    for ta_id, test_aspect in test_aspects.items()
-  }
-  requirement_ta_scenarios: Dict[str, Dict[str, Set[Tuple[Path, str]]]] = defaultdict(
-      lambda: defaultdict(set))
-
-  for scenario in scenarios:
-    scenario_key = (scenario.feature, scenario.scenario_name)
-    for ta_id in scenario.test_aspects:
-      requirement_id = ta_to_requirement.get(ta_id)
-      if not requirement_id:
-        continue
-      requirement_ta_scenarios[requirement_id][ta_id].add(scenario_key)
-
-  return requirement_ta_scenarios
 
 
 def _write_asciidoc_table_simple(

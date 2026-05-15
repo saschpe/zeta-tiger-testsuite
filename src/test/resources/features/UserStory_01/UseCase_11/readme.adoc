@@ -118,6 +118,7 @@ Der MA ist authentisiert und autorisiert.
 * <<TA_A_25767_01>>
 * <<TA_A_25767_02>>
 * <<TA_A_25782_02>>
+* <<TA_A_25782_05>>
 * <<TA_A_26281-01_01>>
 * <<TA_A_26586_02>>
 * <<TA_A_26972-02_01>>

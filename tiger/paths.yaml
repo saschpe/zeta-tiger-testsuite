@@ -3,11 +3,20 @@ client:
   helloZeta: "http://zetaClient/proxy/achelos_testfachdienst/hellozeta"
   helloZetaPath: "/proxy/achelos_testfachdienst/hellozeta"
   helloZetaProxyError: "http://zetaClient/proxy/achelos_testfachdienst/hellozeta/proxy-error"
-  reset: "http://zetaClient/testdriver-api/reset"
   configure: "http://zetaClient/testdriver-api/configure"
+  discover: "http://zetaClient/testdriver-api/discover"
+  register: "http://zetaClient/testdriver-api/register"
+  reset: "http://zetaClient/testdriver-api/reset"
   websocketBaseUrl: "wss://${zeta_base_url}/proxy/achelos_testfachdienst/ws"
   storage: "http://zetaClient/testdriver-api/storage"
   storagePath: "/testdriver-api/storage"
+
+nativeClient:
+  baseUrl: "http://zetaClient"
+  helloZeta: "http://zetaClient/nativedriver-api/hellonative"
+  helloZetaPath: "/nativedriver-api/hellonative"
+  configure: "http://zetaClient/nativedriver-api/configure"
+  reset: "http://zetaClient/nativedriver-api/reset"
 
 erezept:
   rest:
@@ -57,6 +66,8 @@ opa:
 
 popp:
   jwks: "/jwks.json"
+  signedJwks: "/.well-known/signed-jwks"
+  tokenGenerator: "https://${zeta_base_url}/popp-token-generator/popp/test/api/v1/token-generator"
 
 openSearch:
   baseUrl: "http://${opensearch_url}"
@@ -66,7 +77,7 @@ openSearch:
 prometheus:
   baseUrl: "https://${zeta_base_url}/prometheus"
   prometheusMetricsSearchPath: "/api/v1/query"
-  prometheusMetricsSearchPathPattern: "/api/v1/query.*"
+  prometheusMetricsSearchPathPattern: "/prometheus/api/v1/query.*"
 
 jaeger:
   baseUrl: "https://${zeta_base_url}"

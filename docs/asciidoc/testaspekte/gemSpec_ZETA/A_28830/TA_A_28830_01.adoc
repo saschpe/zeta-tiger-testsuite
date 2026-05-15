@@ -1,4 +1,0 @@
-[#TA_A_28830_01]
-===== TA_A_28830_01 - HSM Proxy, Attribute Based Access Control - berechtigte Komponente
-
-"Der ZETA Guard HSM Proxy MUSS den **Zugriff auf die Operationen der Schnittstelle nach berechtigter Komponente einschränken** können. **[<=]"**

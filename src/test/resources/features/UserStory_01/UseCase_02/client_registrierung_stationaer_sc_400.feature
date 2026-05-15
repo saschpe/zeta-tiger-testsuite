@@ -27,12 +27,13 @@
 @UseCase_01_02
 Funktionalität: client_registrierung_stationaer_sc_400
 
-  @dev
   @A_26661
   @TA_A_26661_11
+  @dev
+  @MASVS-AUTH
   Szenario: Client-Registrierung liefert 400 Bad Request
     Gegeben sei TGR setze lokale Variable "badRequestCondition" auf "isRequest && request.path =~ '.*${paths.guard.registerEndpointPath}'"
-    Und Setze im TigerProxy für die Nachricht "${badRequestCondition}" die Manipulation auf Feld "$.body.jwks.keys.0.kty" und Wert "INVALID" und 1 Ausführungen
+    Und Setze im TigerProxy für die Nachricht "${badRequestCondition}" die Manipulation auf Feld "$.body.jwks.keys.0.kty" und Wert "INVALID" und 4 Ausführungen
     Und TGR sende eine leere GET Anfrage an "${paths.client.reset}"
     Wenn TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
     Dann TGR finde die erste Anfrage mit Pfad "${paths.guard.registerEndpointPath}"
@@ -42,3 +43,4 @@ Funktionalität: client_registrierung_stationaer_sc_400
     Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.client.helloZetaPath}"
     Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "400"
     Und TGR prüfe aktuelle Antwort enthält nicht Knoten "$.body.client_id"
+    Und Alle Manipulationen im TigerProxy werden gestoppt

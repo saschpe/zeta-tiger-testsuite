@@ -1,0 +1,12 @@
+[#TA_A_25644-01_03]
+===== TA_A_25644-01_03 - PDP Client-Registrierung mit TPM Attestation / Linux
+
+Die Komponente Authorization Server MUSS die Clients bei der Registrierung über
+
+folgende Mechanismen attestieren:
+
+[ ... ]
+
+• TPM Attestation für [ ... ] Linux Clients
+
+[ ... ]

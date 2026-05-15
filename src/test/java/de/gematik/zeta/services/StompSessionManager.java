@@ -79,7 +79,7 @@ public class StompSessionManager {
   private static int connectionTimeout = 5;
 
   @Setter
-  private static int messageTimeout = 5;
+  private static int messageTimeout = 10;
   private final WebSocketClientFactory clientFactory;
 
   /**
@@ -510,6 +510,9 @@ public class StompSessionManager {
     messageQueue.clear();
   }
 
+  /**
+   * Closes any open raw WebSocket probe session and clears the stored reference.
+   */
   private void closeRawConnectionArtifacts() {
     if (rawWebSocket != null) {
       try {

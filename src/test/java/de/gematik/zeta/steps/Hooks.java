@@ -42,6 +42,8 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
@@ -57,21 +59,30 @@ public class Hooks {
   private static final TraceabilityLookup TRACEABILITY = TraceabilityLookup.load();
   private static final String NO_PROXY_TAG = "@no_proxy";
   private static final String REQUIRE_KUBECTL_TAG = "@require_kubectl";
-  private static final String JUSTIFIED_NOT_TESTED_TAG = "@nicht_getestet_begruendet";
+  private static final String PERFORMANCE_TAG = "@performance";
+  private static final String LONGRUNNING_TAG = "@longrunning";
   private static final String DEPLOYMENT_MODIFICATION_TAG = "@deployment_modification";
   private static final String TLS_CLIENT_FACHDIENST_HOOK_TAG = "@tls_client_fachdienst_hook";
+  private static final String TLS_NATIVE_CLIENT_FACHDIENST_HOOK_TAG = "@tls_native_client_fachdienst_hook";
   private static final String TLS_TEST_TOOL_URL_CONFIG_KEY = "tlsTestTool.url";
   private static final String TLS_TEST_TOOL_PORT_CONFIG_KEY = "tlsTestTool.port";
+  private static final String TLS_TEST_TOOL_CLIENT_DISABLE_TLS_VERIFICATION_CONFIG_KEY = "tlsTestTool.clientDisableTlsVerification";
   private static final String TLS_TEST_TOOL_CA_CERTIFICATE_PATH_CONFIG_KEY = "tlsTestTool.caCertificatePath";
+  private static final String ALLOW_PERFORMANCE_TESTS_CONFIG_KEY = "allow_performance_tests";
+  private static final String ALLOW_LONGRUNNING_TESTS_CONFIG_KEY = "allow_longrunning_tests";
   private static final ThreadLocal<String> CAPTURED_PEP_ORIGINAL_IMAGE = new ThreadLocal<>();
-  private static final int ORDER_RESTORE_DEPLOYMENT_STATE = Integer.MIN_VALUE;
+  private static final ThreadLocal<Map<String, Integer>> CAPTURED_DEPLOYMENT_REPLICAS =
+      ThreadLocal.withInitial(HashMap::new);
+  private static final ThreadLocal<Boolean> SCENARIO_ABORTED = ThreadLocal.withInitial(() -> false);
+  private static final int ORDER_CLEAR_SCENARIO_LIFECYCLE_STATE = Integer.MIN_VALUE;
+  private static final int ORDER_RESTORE_DEPLOYMENT_STATE = ORDER_CLEAR_SCENARIO_LIFECYCLE_STATE + 1;
   private static final int ORDER_PREPARE_SOFT_ASSERTIONS = ORDER_RESTORE_DEPLOYMENT_STATE + 1;
   private static final int ORDER_RESET_TIGER_PROXY_STATE = ORDER_PREPARE_SOFT_ASSERTIONS + 1;
   private static final int ORDER_CLEAR_RECORDED_MESSAGES = ORDER_RESET_TIGER_PROXY_STATE + 1;
   private static final int ORDER_PROXY_REQUIREMENT_GUARD = ORDER_CLEAR_RECORDED_MESSAGES + 1;
-  private static final int ORDER_JUSTIFIED_NOT_TESTED_GUARD = ORDER_PROXY_REQUIREMENT_GUARD + 1;
-  private static final int ORDER_KUBECTL_REQUIREMENT_GUARD = ORDER_JUSTIFIED_NOT_TESTED_GUARD + 1;
-  private static final int ORDER_VERIFY_DEPLOYMENT_MODIFICATION = ORDER_KUBECTL_REQUIREMENT_GUARD + 1;
+  private static final int ORDER_KUBECTL_REQUIREMENT_GUARD = ORDER_PROXY_REQUIREMENT_GUARD + 1;
+  private static final int ORDER_PERFORMANCE_REQUIREMENT_GUARD = ORDER_KUBECTL_REQUIREMENT_GUARD + 1;
+  private static final int ORDER_VERIFY_DEPLOYMENT_MODIFICATION = ORDER_PERFORMANCE_REQUIREMENT_GUARD + 1;
   private static final int ORDER_TLS_CLIENT_PRE_HOOK = ORDER_VERIFY_DEPLOYMENT_MODIFICATION + 1;
   private static final int ORDER_APPEND_TRACEABILITY = Integer.MAX_VALUE;
   private static final int ORDER_VERIFY_SOFT_ASSERTIONS = ORDER_APPEND_TRACEABILITY - 1;
@@ -114,10 +125,10 @@ public class Hooks {
    * Creates hooks backed by the provided services.
    *
    * @param deploymentConfigurationService service used for deployment-related checks and restoration
-   * @param tigerProxyManipulationsSteps helper used for TigerProxy cleanup before scenarios
+   * @param tigerProxyManipulationsSteps   helper used for TigerProxy cleanup before scenarios
    * @param testDriverConfigurationService service used for testdriver reset/configure operations
    */
-  Hooks(final ZetaDeploymentConfigurationService deploymentConfigurationService,
+  public Hooks(final ZetaDeploymentConfigurationService deploymentConfigurationService,
       final TigerProxyManipulationsSteps tigerProxyManipulationsSteps,
       final TestDriverConfigurationService testDriverConfigurationService) {
     this.deploymentConfigurationService = deploymentConfigurationService;
@@ -126,8 +137,8 @@ public class Hooks {
   }
 
   /**
-   * Stores the initially observed PEP image reference once per scenario so rollout cleanup can
-   * restore the deployment to its original image.
+   * Stores the initially observed PEP image reference once per scenario so rollout cleanup can restore the deployment to its original
+   * image.
    *
    * @param imageReference current PEP image reference
    */
@@ -150,11 +161,26 @@ public class Hooks {
   }
 
   /**
+   * Stores the initially observed replica count of a deployment once per scenario so cleanup can
+   * restore it after scaling tests.
+   *
+   * @param deploymentName deployment name
+   * @param replicas initially observed replica count
+   */
+  static void rememberDeploymentReplicaCountIfAbsent(final String deploymentName, final int replicas) {
+    if (deploymentName == null || deploymentName.isBlank()) {
+      return;
+    }
+    CAPTURED_DEPLOYMENT_REPLICAS.get().putIfAbsent(deploymentName.trim(), replicas);
+  }
+
+  /**
    * Aborts the current scenario as skipped.
    *
    * @param reason skip reason visible in the report
    */
   private static void abortScenario(final String reason) {
+    SCENARIO_ABORTED.set(true);
     throw new TestAbortedException(reason);
   }
 
@@ -166,12 +192,47 @@ public class Hooks {
   }
 
   /**
+   * Clears remembered deployment replica counts for the current scenario thread.
+   */
+  private static void clearCapturedDeploymentReplicaCounts() {
+    CAPTURED_DEPLOYMENT_REPLICAS.remove();
+  }
+
+  /**
+   * Resets the aborted marker for the current scenario thread.
+   */
+  public static void clearScenarioAborted() {
+    SCENARIO_ABORTED.set(false);
+  }
+
+  /**
+   * Indicates whether the current scenario was aborted from a before hook.
+   *
+   * @return {@code true} if the scenario was already aborted
+   */
+  private static boolean isScenarioAborted() {
+    return SCENARIO_ABORTED.get();
+  }
+
+  /**
+   * Registers the current scenario before any step or hook can emit report attachments.
+   *
+   * @param scenario active Cucumber scenario
+   */
+  @Before(order = ORDER_CLEAR_SCENARIO_LIFECYCLE_STATE)
+  public void registerScenarioForReportAttachments(final Scenario scenario) {
+    ReportAttachments.setCurrentScenario(scenario);
+  }
+
+  /**
    * Clears any soft assertions before each scenario to avoid leaking state across scenarios.
    */
   @Before(order = ORDER_PREPARE_SOFT_ASSERTIONS)
   public void prepareSoftAssertions() {
     SoftAssertionsContext.reset();
     clearCapturedPepOriginalImage();
+    clearCapturedDeploymentReplicaCounts();
+    clearScenarioAborted();
   }
 
   /**
@@ -227,21 +288,6 @@ public class Hooks {
   }
 
   /**
-   * Skip coverage-only scenarios that document justified test gaps so Allure and Serenity classify them consistently as skipped.
-   */
-  @Before(order = ORDER_JUSTIFIED_NOT_TESTED_GUARD)
-  public void skipJustifiedNotTestedScenarios(final Scenario scenario) {
-    if (scenario == null || !scenario.getSourceTagNames().contains(JUSTIFIED_NOT_TESTED_TAG)) {
-      return;
-    }
-
-    String reason = "Skipping: scenario documents a justified, intentionally not executed test aspect "
-        + "and is tagged " + JUSTIFIED_NOT_TESTED_TAG;
-    scenario.log(reason);
-    abortScenario(reason);
-  }
-
-  /**
    * Skip kubectl-dependent scenarios unless kubectl and cluster access are available.
    */
   @Before(order = ORDER_KUBECTL_REQUIREMENT_GUARD)
@@ -262,10 +308,38 @@ public class Hooks {
     try {
       deploymentConfigurationService.verifyRequirements(namespace);
       log.info("Scenario not skipped, kubectl requirement check passed.");
-    } catch (Exception e) {
+    } catch (AssertionError | RuntimeException e) {
       String reason = "Skipping: kubectl requirement check failed and scenario is tagged " + REQUIRE_KUBECTL_TAG;
       scenario.log(reason);
       log.warn("{} (scenario: '{}', namespace='{}')", reason, scenario.getName(), namespace, e);
+      abortScenario(reason);
+    }
+  }
+
+  /**
+   * Skip performance and long-running scenarios unless the corresponding execution flags are enabled explicitly.
+   */
+  @Before(order = ORDER_PERFORMANCE_REQUIREMENT_GUARD)
+  public void skipPerformanceAndLongRunningScenarios(final Scenario scenario) {
+    if (scenario == null) {
+      return;
+    }
+
+    var tags = scenario.getSourceTagNames();
+
+    if (tags.contains(PERFORMANCE_TAG)
+        && !TigerGlobalConfiguration.readBooleanOptional(ALLOW_PERFORMANCE_TESTS_CONFIG_KEY).orElse(false)) {
+      String reason = "Skipping: performance scenarios require " + ALLOW_PERFORMANCE_TESTS_CONFIG_KEY
+          + "=true and scenario is tagged " + PERFORMANCE_TAG;
+      scenario.log(reason);
+      abortScenario(reason);
+    }
+
+    if (tags.contains(LONGRUNNING_TAG)
+        && !TigerGlobalConfiguration.readBooleanOptional(ALLOW_LONGRUNNING_TESTS_CONFIG_KEY).orElse(false)) {
+      String reason = "Skipping: long-running scenarios require " + ALLOW_LONGRUNNING_TESTS_CONFIG_KEY
+          + "=true and scenario is tagged " + LONGRUNNING_TAG;
+      scenario.log(reason);
       abortScenario(reason);
     }
   }
@@ -307,7 +381,7 @@ public class Hooks {
 
     try {
       deploymentConfigurationService.verifyRequirements(namespace);
-    } catch (Exception e) {
+    } catch (AssertionError | RuntimeException e) {
       String reason = "Skipping: verification check for deployment modification failed";
       scenario.log(reason);
       log.error("Unexpected error while verifying deployment modification requirements", e);
@@ -316,14 +390,13 @@ public class Hooks {
   }
 
   /**
-   * Configures the testdriver for TLS validation scenarios after verifying that the TLS test tool
-   * service is reachable.
+   * Configures the testdriver for TLS validation scenarios after verifying that the TLS test tool service is reachable.
    *
    * @param scenario active Cucumber scenario
    */
   @Before(order = ORDER_TLS_CLIENT_PRE_HOOK)
   public void patchTestdriverForTlsClientScenario(final Scenario scenario) {
-    if (scenario == null || !scenario.getSourceTagNames().contains(TLS_CLIENT_FACHDIENST_HOOK_TAG)) {
+    if (scenario == null || !isTlsClientScenario(scenario)) {
       return;
     }
 
@@ -331,7 +404,7 @@ public class Hooks {
       TlsTestToolServiceFactory.getInstance().getState();
       log.info("TLS client pre hook: TLS test tool service availability check passed.");
     } catch (AssertionError e) {
-      String reason = "Skipping: TLS test tool service is not reachable and scenario is tagged " + TLS_CLIENT_FACHDIENST_HOOK_TAG;
+      String reason = "Skipping: TLS test tool service is not reachable and scenario is tagged " + getTlsClientHookTag(scenario);
       scenario.log(reason);
       log.warn("{}", reason, e);
       abortScenario(reason);
@@ -347,15 +420,19 @@ public class Hooks {
 
     String tlsTestToolServerUrl = tlsTestToolUrl + ":" + tlsTestToolPort;
 
+    var clientDisableTlsVerification = TigerGlobalConfiguration.readBooleanOptional(
+            TLS_TEST_TOOL_CLIENT_DISABLE_TLS_VERIFICATION_CONFIG_KEY)
+        .orElse(false);
+
     try {
-      testDriverConfigurationService.configure(tlsTestToolServerUrl, readTlsTestToolCaCertificatePem());
+      getTlsTestDriverConfigurationService(scenario)
+          .configure(tlsTestToolServerUrl, readTlsTestToolCaCertificatePem(), clientDisableTlsVerification);
     } catch (AssertionError e) {
       throw new AssertionError("Failed pre hook: could not configure the testdriver for TLS client scenario.", e);
     }
     log.info("TLS client pre hook: configured testdriver resource '{}' for scenario '{}'.",
         tlsTestToolServerUrl, scenario.getName());
   }
-
 
   /**
    * Append the traceability table after each scenario has finished.
@@ -382,6 +459,9 @@ public class Hooks {
    */
   @After(order = ORDER_VERIFY_SOFT_ASSERTIONS)
   public void verifySoftAssertions() {
+    if (isScenarioAborted()) {
+      return;
+    }
     SoftAssertionsContext.assertAll();
   }
 
@@ -453,6 +533,23 @@ public class Hooks {
       }
     }
 
+    for (Map.Entry<String, Integer> entry : CAPTURED_DEPLOYMENT_REPLICAS.get().entrySet()) {
+      try {
+        var scaleResult =
+            deploymentConfigurationService.scaleDeployment(namespace, entry.getKey(), entry.getValue());
+        if (scaleResult.exitCode() != 0) {
+          log.warn("Restore deployment modification: could not restore replica count for deployment '{}' to {}: {}",
+              entry.getKey(), entry.getValue(), scaleResult.stderr());
+        } else {
+          log.info("Restore deployment modification: restored deployment '{}' to {} replicas",
+              entry.getKey(), entry.getValue());
+        }
+      } catch (Exception e) {
+        log.warn("Restore deployment modification: could not restore replica count for deployment '{}' to {}",
+            entry.getKey(), entry.getValue(), e);
+      }
+    }
+
     boolean restoredPepDeploymentImageWithRollout = restorePepDeploymentImage(namespace);
 
     // since current modifications are only related to PEP HTTP proxy, it's ok to restart only once for both restores
@@ -492,7 +589,13 @@ public class Hooks {
     }
   }
 
-  boolean restorePepDeploymentImage(final String namespace) {
+  /**
+   * Restores the PEP deployment image to the configured update tag and verifies the rollout result.
+   *
+   * @param namespace Kubernetes namespace containing the PEP deployment
+   * @return {@code true} when cleanup triggered a rollout that settled on the expected image, otherwise {@code false}
+   */
+  public boolean restorePepDeploymentImage(final String namespace) {
     String deploymentName = TigerGlobalConfiguration.readStringOptional("zetaDeploymentConfig.pep.podName")
         .orElse("");
     String containerName = TigerGlobalConfiguration.readStringOptional("zetaDeploymentConfig.pep.nginx.containerName")
@@ -554,6 +657,7 @@ public class Hooks {
     return imageRestoreTriggeredRollout;
   }
 
+
   /**
    * Restores the testdriver state for TLS client validation scenarios.
    *
@@ -561,16 +665,69 @@ public class Hooks {
    */
   @After(order = ORDER_TLS_CLIENT_POST_HOOK)
   public void rollbackTestdriverAfterTlsClientScenario(final Scenario scenario) {
-    if (scenario == null || !scenario.getSourceTagNames().contains(TLS_CLIENT_FACHDIENST_HOOK_TAG)) {
+    if (scenario == null || isScenarioAborted()
+        || !isTlsClientScenario(scenario)) {
       return;
     }
 
     try {
-      testDriverConfigurationService.reset();
+      getTlsTestDriverConfigurationService(scenario).reset();
     } catch (AssertionError e) {
-      throw new AssertionError("Failed post hook: could not reset the testdriver after TLS client scenario.", e);
+      var message = "TLS client post hook: could not reset the testdriver after scenario '"
+          + scenario.getName() + "'.";
+      scenario.log(message);
+      log.warn(message, e);
+      return;
     }
     log.info("TLS client post hook: reset testdriver after scenario '{}'.", scenario.getName());
+  }
+
+  /**
+   * Checks whether the scenario needs TLS client testdriver configuration.
+   *
+   * @param scenario active Cucumber scenario
+   * @return {@code true} if a TLS client hook tag is present
+   */
+  private boolean isTlsClientScenario(final Scenario scenario) {
+    var tags = scenario.getSourceTagNames();
+    return tags.contains(TLS_CLIENT_FACHDIENST_HOOK_TAG)
+        || tags.contains(TLS_NATIVE_CLIENT_FACHDIENST_HOOK_TAG);
+  }
+
+  /**
+   * Returns the TLS client hook tag used by the scenario.
+   *
+   * @param scenario active Cucumber scenario
+   * @return configured TLS client hook tag
+   */
+  private String getTlsClientHookTag(final Scenario scenario) {
+    return scenario.getSourceTagNames().contains(TLS_NATIVE_CLIENT_FACHDIENST_HOOK_TAG)
+        ? TLS_NATIVE_CLIENT_FACHDIENST_HOOK_TAG
+        : TLS_CLIENT_FACHDIENST_HOOK_TAG;
+  }
+
+  /**
+   * Selects the testdriver configuration service for the regular or native client driver.
+   *
+   * @param scenario active Cucumber scenario
+   * @return testdriver configuration service matching the scenario tag
+   */
+  private TestDriverConfigurationService getTlsTestDriverConfigurationService(final Scenario scenario) {
+    if (scenario.getSourceTagNames().contains(TLS_NATIVE_CLIENT_FACHDIENST_HOOK_TAG)) {
+      return TestDriverConfigurationServiceFactory.getInstanceForPathPrefix("paths.nativeClient");
+    }
+    return testDriverConfigurationService;
+  }
+
+  /**
+   * Clears thread-local scenario lifecycle state after all other after hooks have completed.
+   */
+  @After(order = ORDER_CLEAR_SCENARIO_LIFECYCLE_STATE)
+  public void clearScenarioLifecycleState() {
+    clearCapturedPepOriginalImage();
+    clearScenarioAborted();
+    SoftAssertionsContext.reset();
+    ReportAttachments.clearCurrentScenario();
   }
 
   /**

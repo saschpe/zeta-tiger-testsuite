@@ -1,7 +1,30 @@
 == Testumgebungen
 
-Die Testsuite wird in zwei Zielumgebungen betrieben.
-Beide verwenden die gleiche logische Architektur und unterscheiden sich nur im Betriebskontext (realer Cluster vs. lokale Simulation).
+Die Testsuite wird in drei Ausprägungen betrieben.
+Für einen vollständigen Nachweis werden die Tests daher in drei unterschiedlichen Umgebungen ausgeführt.
+Diese Umgebungen unterscheiden sich durch den Einsatz des Tiger Proxy und durch die verfügbaren Rechte während des Testlaufs.
+
+=== Erforderliche Testausführungen
+
+Die folgende Matrix zeigt die vorgesehenen Ausführungen der Testsuite:
+
+[cols="1,1,1",options="header"]
+|===
+|  | Rechte zur Änderung des Deployments | Keine Rechte zur Änderung des Deployments
+
+| Tiger Proxy vorhanden | KIND | Staging-Cluster
+| Kein Tiger Proxy vorhanden | Performance-Cluster |  
+|===
+
+Die drei Ausführungen decken unterschiedliche Prüfziele ab:
+
+* Die Staging-Umgebung ist die produktionsnahe Umgebung mit Tiger Proxy und ohne Rechte zur Änderung des Deployments.
+* Die KIND- oder vergleichbare Namespace-/Cluster-Umgebung erlaubt identisches Deployment sowie `kubectl`-Eingriffe und Deployment-Anpassungen während der Laufzeit.
+* Die Performance-Umgebung ohne Tiger Proxy dient der Ausführung der Performance-Tests.
+
+Damit wird sichergestellt, dass funktionale Prüfungen, Laufzeitmanipulationen und Performance-Nachweise unter den jeweils passenden betrieblichen Rahmenbedingungen erfolgen.
+
+Die Testsuite wird in den Zielumgebungen mit derselben logischen Architektur betrieben.
 
 === Produktiver Kubernetes-Cluster
 
@@ -19,7 +42,8 @@ include::../../../tiger.yaml[]
 NOTE: Stattdessen wird der Wert `zeta_base_url` (nur Hostname, ohne Schema) in der `defaults.yaml` gesetzt.
 Die Tests leiten daraus automatisch `https://`- und `wss://`-Zugriffe ab.
 
-Die Tiger-Proxy-Erfassung für den Cluster-Traffic wird bei Bedarf über das Profil ``PROFILE=proxy`` aktiviert. In diesem Betriebsmodus wird die Proxy-Konfiguration geladen; der Admin-Port ist anschließend per Port-Forward unter ``http://localhost:9999`` erreichbar.
+Die Tiger-Proxy-Erfassung für den Cluster-Traffic wird bei Bedarf über das Profil ``PROFILE=proxy`` aktiviert.
+In diesem Betriebsmodus wird die Proxy-Konfiguration geladen; der Admin-Port ist anschließend per Port-Forward unter ``http://localhost:9999`` erreichbar.
 
 === Simulierter Kubernetes-Cluster (kind)
 

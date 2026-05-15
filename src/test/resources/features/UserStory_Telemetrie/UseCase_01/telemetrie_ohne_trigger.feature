@@ -27,10 +27,10 @@
 @UseCase_TELEMETRIE_01
 Funktionalität: Telemetrie-Tests ohne dedizierten Trigger
 
-  @internal
-  @require_kubectl
   @deployment_modification
+  @internal
   @no_proxy
+  @require_kubectl
   Szenario: PEP Deployment Image aktualisieren
     Und ermittle den Image-Pfad für den Container "${zetaDeploymentConfig.pep.nginx.containerName}" im Deployment "${zetaDeploymentConfig.pep.podName}" und speichere in der Variable "pep_image_path"
     Und setze das Image "${pep_image_path}:${zetaDeploymentConfig.pep.image.versionDowngrade}" für den Container "${zetaDeploymentConfig.pep.nginx.containerName}" im Deployment "${zetaDeploymentConfig.pep.podName}"
@@ -39,151 +39,93 @@ Funktionalität: Telemetrie-Tests ohne dedizierten Trigger
     Und rolle das Deployment "${zetaDeploymentConfig.pep.podName}" zurück
     Und prüfe, dass das Image "${pep_image_path}:${zetaDeploymentConfig.pep.image.versionUpdate}" für den Container "${zetaDeploymentConfig.pep.nginx.containerName}" im Deployment "${zetaDeploymentConfig.pep.podName}" aktiv ist
 
-  @dev
-  @A_26988
-  Szenariogrundriss: Telemetrie-Daten Service - Fehlermeldungen
-    Wenn TGR sende eine GET Anfrage an "${paths.openSearch.baseUrl}${paths.openSearch.openTelemetryLogsSearchPath}" mit folgenden Daten:
-      | q                                                                                                                                                                                 | size |
-      | resource.k8s.namespace.name:${zeta_k8s_namespace} AND resource.k8s.container.name:<containerName> AND attributes.log.file.path:/var/log/pods/* AND attributes.log.iostream:stderr | 1    |
-    Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.openSearch.openTelemetryLogsSearchPathPattern}"
-    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "200"
-    # Die Existenz von hits.hits.0 bedeutet, dass es mindestens einen Open Telemetry Log-Eintrag für genau diesen Container gibt.
-    Und TGR prüfe aktuelle Antwort enthält Knoten "$.body.hits.hits.0"
+  @A_27261
+  @TA_A_27261_01
+  @no_proxy
+  @require_kubectl
+  @MASVS-RESILIENCE
+  Szenario: Telemetriedaten-Service gibt Telemetriedaten per OTLP gRPC oder HTTP JSON weiter
+    Dann prüfe, dass die Telemetrie-Gateway Collector-Konfiguration Telemetriedaten per erlaubtem OTLP Protokoll weitergibt
 
-    @TA_A_26988_01
-    Beispiele: Ingress
-      | containerName                      |
-      | ${telemetry.containerName.ingress} |
+  @A_27727-01
+  @TA_A_27727-01_01
+  @TA_A_27727-01_02
+  @no_proxy
+  @require_kubectl
+  @MASVS-RESILIENCE
+  Szenario: Telemetriedaten-Service liefert Traces asynchron per Batch-Export
+    Dann prüfe, dass die Telemetrie-Gateway Collector-Konfiguration Traces per Batch exportiert
 
-    @TA_A_26988_02
-    Beispiele: Egress
-      | containerName                     |
-      | ${telemetry.containerName.egress} |
-
-    @TA_A_26988_03
-    Beispiele: HTTP Proxy
-      | containerName |
-      | ${telemetry.containerName.httpProxy} |
-
-    Beispiele: HTTP Proxy helper for metrics
-      | containerName                            |
-      | ${telemetry.containerName.helperMetrics} |
-
-    # TODO: TA_A_26988_04, PEP Datenbank         <- Container wird wahrscheinlich nicht benötigt
-    # @TA_A_26988_04
-    # Beispiele: PEP Datenbank
-    #   | containerName                          |
-    #   | ${telemetry.containerName.pepDatabase} |
-
-    @TA_A_26988_05
-    Beispiele: Authorization Server
-      | containerName                                  |
-      | ${telemetry.containerName.authorizationServer} |
-
-    @TA_A_26988_06
-    Beispiele: PDP Datenbank
-      | containerName                          |
-      | ${telemetry.containerName.pdpDatabase} |
-
-    @TA_A_26988_07
-    Beispiele: Policy Engine
-      | containerName                           |
-      | ${telemetry.containerName.policyEngine} |
-
-    # TODO: TA_A_26988_08, Notification Service  <- Container fehlt noch
-    # @TA_A_26988_08
-    # Beispiele: Notification Service
-    #   | containerName                                  |
-    #   | ${telemetry.containerName.notificationService} |
-
-    # TODO: TA_A_26988_09 Management Service   <- Container wird wahrscheinlich nicht benötigt
-    # @TA_A_26988_09
-    # Beispiele: Management Service
-    #   | containerName                                |
-    #   | ${telemetry.containerName.managementService} |
-
-    @TA_A_26988_10
-    Beispiele: Telemetrie Daten Service
-      | containerName                                   |
-      | ${telemetry.containerName.telemetryDataService} |
-
-    Beispiele: Zulieferer für Telemetrie Daten Service, Log Collector
-      | containerName                                 |
-      | ${telemetry.containerName.helperLogCollector} |
-
-    @TA_A_26988_11
-    Beispiele: Resource Server
-      | containerName                             |
-      | ${telemetry.containerName.resourceServer} |
-
-  @dev
   @A_27264
+  @dev
+  @MASVS-RESILIENCE
   Szenariogrundriss: OpenTelemetry Logs für ZETA Guard Komponenten (ohne Datenbanken)
     Wenn TGR sende eine GET Anfrage an "${paths.openSearch.baseUrl}${paths.openSearch.openTelemetryLogsSearchPath}" mit folgenden Daten:
       | q                                                                                                                                              | size |
-      | resource.k8s.namespace.name:${zeta_k8s_namespace} AND resource.k8s.container.name:<containerName> AND attributes.log.file.path:/var/log/pods/* | 1    |
+      | resource.k8s.namespace.name:${zeta_k8s_namespace} AND resource.service.name:<serviceName> | 1    |
     Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.openSearch.openTelemetryLogsSearchPathPattern}"
     Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "200"
-    # Die Existenz von hits.hits.0 bedeutet, dass es mindestens einen Open Telemetry Log-Eintrag für genau diesen Container gibt.
+    # Die Existenz von hits.hits.0 bedeutet, dass es mindestens einen Open Telemetry Log-Eintrag für genau diesen Service gibt.
     Und TGR prüfe aktuelle Antwort enthält Knoten "$.body.hits.hits.0"
 
     @TA_A_27264_19
     Beispiele: Ingress
-      | containerName                      |
-      | ${telemetry.containerName.ingress} |
+      | serviceName                  |
+      | ${telemetry.service.ingress} |
 
     @TA_A_27264_20
     Beispiele: Egress
-      | containerName                     |
-      | ${telemetry.containerName.egress} |
+      | serviceName                 |
+      | ${telemetry.service.egress} |
 
     @TA_A_27264_21
     Beispiele: HTTP Proxy
-      | containerName                        |
-      | ${telemetry.containerName.httpProxy} |
+      | serviceName                    |
+      | ${telemetry.service.httpProxy} |
 
     Beispiele: HTTP Proxy helper for metrics
-      | containerName                            |
-      | ${telemetry.containerName.helperMetrics} |
+      | serviceName                       |
+      | ${telemetry.service.helperMetrics} |
 
     @TA_A_27264_22
     Beispiele: Authorization Server
-      | containerName                                  |
-      | ${telemetry.containerName.authorizationServer} |
+      | serviceName                              |
+      | ${telemetry.service.authorizationServer} |
 
     @TA_A_27264_23
     Beispiele: Policy Engine
-      | containerName                           |
-      | ${telemetry.containerName.policyEngine} |
+      | serviceName                       |
+      | ${telemetry.service.policyEngine} |
 
-    # TODO: TA_A_27264_24, Notification Service  <- Container fehlt noch
+    # TODO: TA_A_27264_24, Notification Service  <- Service fehlt noch
     # @TA_A_27264_24
     # Beispiele: Notification Service
-    #   | containerName         |
-    #   | notification-service  |
+    #   | serviceName                              |
+    #   | ${telemetry.service.notificationService} |
 
-    # TODO: TA_A_27264_25, Management Service    <- Container wird wahrscheinlich nicht benötigt
+    # TODO: TA_A_27264_25, Management Service    <- Service wird wahrscheinlich nicht benötigt
     # @TA_A_27264_25
     # Beispiele: Management Service
-    #   | containerName        |
-    #   | management-service   |
+    #   | serviceName                            |
+    #   | ${telemetry.service.managementService} |
 
     @TA_A_27264_26
     Beispiele: Telemetrie Daten Service
-      | containerName                                   |
-      | ${telemetry.containerName.telemetryDataService} |
+      | serviceName                               |
+      | ${telemetry.service.telemetryDataService} |
 
     Beispiele: Zulieferer für Telemetrie Daten Service, Log Collector
-      | containerName                                 |
-      | ${telemetry.containerName.helperLogCollector} |
+      | serviceName                             |
+      | ${telemetry.service.helperLogCollector} |
 
     @TA_A_27264_27
     Beispiele: Resource Server
-      | containerName                             |
-      | ${telemetry.containerName.resourceServer} |
+      | serviceName                         |
+      | ${telemetry.service.resourceServer} |
 
-  @dev
   @A_27264
+  @dev
+  @MASVS-RESILIENCE
   Szenariogrundriss: OpenTelemetry Traces für ZETA Guard Komponenten (ohne Datenbanken)
     Wenn TGR sende eine GET Anfrage an "${paths.jaeger.baseUrl}${paths.jaeger.jaegerTracesSearchPath}" mit folgenden Daten:
       | service   | lookback | limit |
@@ -193,60 +135,61 @@ Funktionalität: Telemetrie-Tests ohne dedizierten Trigger
     # Die Existenz von traceID bedeutet, dass es mindestens einen Open Telemetry Trace für genau diesen Container/Service gibt.
     Und TGR prüfe aktuelle Antwort enthält Knoten "$.body.data.0.traceID"
 
-    @TA_A_27264_01
-    Beispiele: Ingress
-      | service                      |
-      | ${telemetry.service.ingress} |
-
-
-    @TA_A_27264_02
-    Beispiele: Egress
-      | service                     |
-      | ${telemetry.service.egress} |
+#    @TA_A_27264_01
+#    Beispiele: Ingress
+#      | service                      |
+#      | ${telemetry.service.ingress} |
+#
+#
+#    @TA_A_27264_02
+#    Beispiele: Egress
+#      | service                     |
+#      | ${telemetry.service.egress} |
 
     @TA_A_27264_03
     Beispiele: HTTP Proxy
       | service                        |
       | ${telemetry.service.httpProxy} |
 
-    @TA_A_27264_04
-    Beispiele: Authorization Server
-      | service                                  |
-      | ${telemetry.service.authorizationServer} |
+#    @TA_A_27264_04
+#    Beispiele: Authorization Server
+#      | service                                  |
+#      | ${telemetry.service.authorizationServer} |
+#
+#    @TA_A_27264_05
+#    Beispiele: Policy Engine
+#      | service                           |
+#      | ${telemetry.service.policyEngine} |
+#
+#    # TODO: TA_A_27264_06, Notification Service  <- Container fehlt noch
+#    # @TA_A_27264_06
+#    # Beispiele: Notification Service
+#    #   | service                                  |
+#    #   | ${telemetry.service.notificationService} |
+#
+#    # TODO: TA_A_27264_07, Management Service    <- Container wird wahrscheinlich nicht benötigt
+#    # @TA_A_27264_07
+#    # Beispiele: Management Service
+#    #   | service                                |
+#    #   | ${telemetry.service.managementService} |
+#
+#    @TA_A_27264_08
+#    Beispiele: Telemetrie Daten Service
+#      | service                                   |
+#      | ${telemetry.service.telemetryDataService} |
+#
+#    Beispiele: Zulieferer für Telemetrie Daten Service, Log Collector
+#      | service                                 |
+#      | ${telemetry.service.helperLogCollector} |
+#
+#    @TA_A_27264_09
+#    Beispiele: Resource Server
+#      | service                             |
+#      | ${telemetry.service.resourceServer} |
 
-    @TA_A_27264_05
-    Beispiele: Policy Engine
-      | service                           |
-      | ${telemetry.service.policyEngine} |
-
-    # TODO: TA_A_27264_06, Notification Service  <- Container fehlt noch
-    # @TA_A_27264_06
-    # Beispiele: Notification Service
-    #   | service                                  |
-    #   | ${telemetry.service.notificationService} |
-
-    # TODO: TA_A_27264_07, Management Service    <- Container wird wahrscheinlich nicht benötigt
-    # @TA_A_27264_07
-    # Beispiele: Management Service
-    #   | service                                |
-    #   | ${telemetry.service.managementService} |
-
-    @TA_A_27264_08
-    Beispiele: Telemetrie Daten Service
-      | service                                   |
-      | ${telemetry.service.telemetryDataService} |
-
-    Beispiele: Zulieferer für Telemetrie Daten Service, Log Collector
-      | service                                 |
-      | ${telemetry.service.helperLogCollector} |
-
-    @TA_A_27264_09
-    Beispiele: Resource Server
-      | service                             |
-      | ${telemetry.service.resourceServer} |
-
-  @dev
   @A_27264
+  @dev
+  @MASVS-RESILIENCE
   Szenariogrundriss: OpenTelemetry Metrics für ZETA Guard Komponenten (ohne Datenbanken)
     Wenn TGR sende eine GET Anfrage an "${paths.prometheus.baseUrl}${paths.prometheus.prometheusMetricsSearchPath}" mit folgenden Daten:
       | query                                                 |
@@ -312,32 +255,33 @@ Funktionalität: Telemetrie-Tests ohne dedizierten Trigger
       | container                              |
       |  ${telemetry.container.resourceServer} |
 
-  @dev
   @A_27492-02
+  @dev
+  @MASVS-RESILIENCE
   Szenariogrundriss: OpenTelemetry Unterstützung von HTTP Proxy, Authorization Server, Policy Engine und Notification Service
     Wenn TGR sende eine GET Anfrage an "${paths.openSearch.baseUrl}${paths.openSearch.openTelemetryLogsSearchPath}" mit folgenden Daten:
-      | q                                                                                                                                              | size |
-      | resource.k8s.namespace.name:${zeta_k8s_namespace} AND resource.k8s.container.name:<containerName> AND attributes.log.file.path:/var/log/pods/* | 1    |
+      | q                                                                                                                                                                   | size |
+      | resource.k8s.namespace.name:${zeta_k8s_namespace} AND resource.k8s.container.name:${telemetry.service.telemetryDataService} AND resource.service.name:<serviceName> | 1    |
     Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.openSearch.openTelemetryLogsSearchPathPattern}"
     Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "200"
     # Die Existenz von hits.hits.0 bedeutet, dass es mindestens einen Open Telemetry Log-Eintrag für genau diesen Container gibt.
     Und TGR prüfe aktuelle Antwort enthält Knoten "$.body.hits.hits.0"
 
+    @TA_A_27492-02_02
     Beispiele: HTTP Proxy
-      | containerName                        |
-      | ${telemetry.containerName.httpProxy} |
+      | serviceName                        |
+      | ${telemetry.service.httpProxy} |
 
     @TA_A_27492-02_03
     Beispiele: Authorization Server
-      | containerName                                  |
-      | ${telemetry.containerName.authorizationServer} |
+      | serviceName                                  |
+      | ${telemetry.service.authorizationServer} |
 
+    @TA_A_27492-02_07
     Beispiele: Policy Engine
-      | containerName                           |
-      | ${telemetry.containerName.policyEngine} |
+      | serviceName                           |
+      | ${telemetry.service.policyEngine} |
 
     # Beispiele: Notification Service # TODO: Container fehlt noch im Deployment
-    #   | containerName                                  |
-    #   | ${telemetry.containerName.notificationService} |
-
-
+    #   | serviceName                                  |
+    #   | ${telemetry.service.notificationService} |

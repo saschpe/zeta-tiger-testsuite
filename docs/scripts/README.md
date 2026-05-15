@@ -25,6 +25,8 @@ deklarierten Abhängigkeiten.
   und verknüpfte TestAspekte direkt aus YouTrack ab und gibt eine strukturierte Übersicht aus.
 - [generate_cucumber_methods.py](src/testsuite_docs/generate_cucumber_methods.py): erzeugt eine
   generierte TGR/Cucumber-Step-Tabelle aus projektinternem Glue.
+- [masvs_tags.py](src/testsuite_docs/masvs_tags.py): ergänzt und prüft `@MASVS-*`-Tags in
+  Feature-Szenarien anhand einer AFO/MASVS-CSV.
 - [gitlab_issue_sync.py](src/testsuite_docs/gitlab_issue_sync.py): erstellt/aktualisiert GitLab-Issues
   für AFOs/Testaspekte, schließt Testaspekte mit @TA_-Szenario-Tags und synchronisiert AFO-Issues
   (open/closed).
@@ -64,10 +66,7 @@ oder Cucumber werden nicht ausgewertet.
 Das Maven-Profil `generate-documentation` erzeugt die Artefakte im Schritt
 `generate-resources`, z. B. mit `mvn -Pgenerate-documentation generate-resources`.
 
-Szenarien oder ganze Features, bei denen der Testaspekt *noch nicht* im Produkt umgesetzt ist,
-werden mit `@product_not_impl` (bzw. `@produkt_not_impl`, `@canary`, `@not_impl`,
-`@not_implemented`) getaggt.
-Ohne Tag wird von einer Umsetzung im Produkt ausgegangen.
+Der Produktumsetzungsstand wird ausschließlich über die Produktstatus-CSV gepflegt.
 Die generierte Tabelle der User Stories/Use Cases zeigt in
 „implementiert (Szenario vorhanden)“ die vorhandene Verknüpfung.
 
@@ -80,22 +79,25 @@ Die Traceability-Generierung erzeugt daraus die Tabelle
 Umsetzungsstand, die Testsuite-Abdeckung (`ja`/`teilweise`/`nein`), die prozentuale
 Testabdeckung (implementierte/gesamte Testaspekte) sowie Hinweise zur Lücke zeigt.
 
-Die Abdeckungsmetriken werden konsistent aus den Testaspekt-Katalogen und Feature-Tags berechnet. Ein Testaspekt gilt als `implementiert`, sobald mindestens ein Szenario den entsprechenden Tag referenziert. Szenarien ohne Testaspekt-Tag werden dabei für die Metriken ignoriert; ebenso werden `A_*`-Tags nicht in die Abdeckungsberechnung einbezogen. Die Abdeckung zählt eindeutige Testaspekte und nicht die Anzahl einzelner Szenarioausführungen. Der Status einer Anforderung (`vollständig`, `teilweise`, `nicht abgedeckt`, `keine Testaspekte`) ergibt sich aus dem Verhältnis implementierter zu insgesamt vorhandenen Testaspekten. Das Diagramm `traceability-coverage-requirements-tested.mmd` fasst zusätzlich zusammen, wie viele Anforderungen mindestens einen implementierten Testaspekt besitzen; Anforderungen ohne Testaspekte werden dort als „kein Testaspekt implementiert“ geführt. Die Produktumsetzung in der Lückenanalyse basiert ausschließlich auf den CSV-Angaben und berücksichtigt keine `@product_not_impl`-Tags.
+Die Abdeckungsmetriken werden konsistent aus den Testaspekt-Katalogen und Feature-Tags berechnet.
+Ein Testaspekt gilt als `implementiert`, sobald mindestens ein Szenario den entsprechenden Tag referenziert.
+Szenarien ohne Testaspekt-Tag werden dabei für die Metriken ignoriert; ebenso werden Anforderungs-Tags nicht in die Abdeckungsberechnung
+einbezogen.
+Die Abdeckung zählt eindeutige Testaspekte und nicht die Anzahl einzelner Szenarioausführungen.
+Der Status einer Anforderung (`vollständig`, `teilweise`, `nicht abgedeckt`, `keine Testaspekte`) ergibt sich aus dem Verhältnis
+implementierter zu insgesamt vorhandenen Testaspekten.
+Das Diagramm `traceability-coverage-requirements-tested.mmd` fasst zusätzlich zusammen, wie viele Anforderungen mindestens einen
+implementierten Testaspekt besitzen; Anforderungen ohne Testaspekte werden dort als „kein Testaspekt implementiert“ geführt.
+Die Produktumsetzung in der Lückenanalyse basiert ausschließlich auf den CSV-Angaben.
 
-Für Anforderungen mit erhöhter Priorität aus der Bedrohungsanalyse kann eine
-zweite CSV unter `docs/asciidoc/tables/source/bedrohungsanalyse_requirements.csv`
-hinterlegt werden (Spalten: `Anforderung`, optional `Priorität`, optional
-`Begründung`).
-Die Generierung erzeugt daraus zwei Tabellen:
-
-- `docs/asciidoc/tables/source/bedrohungsanalyse_requirements.csv`
-- `docs/asciidoc/tables/generated/bedrohungsanalyse_summary.adoc`:
-  Anforderungsübersicht mit TA-Erfüllung als Bruch und Prozentwert
-  (`erfüllt / gesamt`, z. B. `5/8 (63%)`).
-- `docs/asciidoc/tables/generated/bedrohungsanalyse_gaps.adoc`:
-  nur offene Testaspekte mit `Ist/Soll` als Bruch und Prozentwert.
-
-Die Soll-Ist-Bewertung erfolgt pro Testaspekt, wobei die Priorität der Anforderung auf die zugehörigen Testaspekte heruntergebrochen wird. Als Zielgröße gilt je Testaspekt: `hoch` = 3 Szenarien (sofern möglich), `mittel` = 2 und `niedrig` = 1 eindeutiges Szenario. Der Ist-Wert wird als Anzahl eindeutiger Szenarien je Testaspekt ermittelt.
+Für die MASVS-Abdeckung liest die Traceability-Generierung zusätzlich `docs/masvs_mapping.csv` und die `@MASVS-*`-Tags aus den
+Feature-Dateien.
+Sie erzeugt `docs/asciidoc/tables/generated/masvs_coverage_by_category.adoc` mit MASVS-Kategorie, Anforderung, Use Case und Szenario.
+Zusätzlich erzeugt sie `docs/asciidoc/tables/generated/masvs_coverage_by_requirement.adoc` mit der MASVS-Abdeckung je Anforderung.
+Die MASVS-Tag-Konsistenz wird in der CI vor der Traceability-Generierung mit `tag-masvs-scenarios --check` geprüft.
+Diese MASVS-Sicht ist die risikobasierte Sicherheitsprojektion in der Traceability-Generierung.
+Die risikobasierte Sicherheitsabdeckung wird damit aus der AFO/MASVS-Zuordnung des Sicherheitstestplans und aus nachgewiesenen Szenario-Tags
+abgeleitet.
 
 Parameter:
 
@@ -111,26 +113,102 @@ Anforderungen oder User Stories) werden nur in der ersten Zeile gezeigt;
 nachfolgende Zeilen bleiben leer, um Zusammengehörigkeiten ohne Rowspan-Markup
 sichtbar zu machen.
 
+### Interne Laufzeit-Fehlerannotationen
+
+Der Cucumber-Plugin `de.gematik.zeta.traceability.RuntimeCoveragePlugin` erzeugt nach Testläufen die Laufzeit-CSV-Dateien
+`runtime_coverage.csv`, `runtime_coverage_testaspects.csv` und `runtime_coverage_meta.csv`.
+Zusätzlich kann er eine interne CSV mit Tickets und Verantwortlichen für erwartete rote oder übersprungene Testergebnisse einlesen.
+Standardpfad ist `docs/asciidoc/tables/source/runtime_failure_annotations.internal.csv`.
+Der Pfad kann mit `-Dzeta.runtime.failure.annotations.csv=...` oder `ZETA_RUNTIME_FAILURE_ANNOTATIONS_CSV` überschrieben werden.
+Die Datei ist in `.githubignore` eingetragen und soll nicht in öffentliche Artefakte übernommen werden.
+
+Empfohlenes CSV-Format:
+
+```csv
+Zuordnung,Anforderung,Testaspekt,Feature,Szenario,Tickets,Verantwortlich
+Szenario,A_25663,TA_A_25663_01,src/test/resources/features/UserStory_01/UseCase_22/client_ressource_anfrage_fachdienst_sc_200.feature,"DPoP Token Binding für Access und Refresh Token",https://jira.example/ZETA-1234,Team ZETA
+Testaspekt,A_28963,TA_A_28963_01,,,ZETA-2222,Team ZETA
+Anforderung,A_26493-01,,,,ZETA-3333,Team ZETA
+```
+
+Die CSV-Datei ist UTF-8; Umlaute wie `ä`, `ö`, `ü` und `ß` sind erlaubt.
+Für neue Dateien sollten die deutschen Spaltennamen oben verwendet werden.
+
+`Zuordnung` unterstützt `Szenario`, `Testaspekt` und `Anforderung`.
+Szenario-Zuordnungen werden über AFO, TA, Feature-Pfad und Szenarioname gegen die konkrete Fehlersituation gematcht.
+TA-Zuordnungen greifen für rote oder übersprungene Testaspekt-Zeilen und für AFO-Zeilen mit roten Szenarien dieses Testaspekts.
+AFO-Zuordnungen dienen als Fallback für rote oder übersprungene Anforderungszeilen.
+Die generierte `runtime_coverage.csv` enthält dafür zusätzlich `Tickets` und `Verantwortlich` sowie `Scenarios` mit den ausgeführten
+Szenarionamen pro AFO.
+Die generierte `runtime_coverage_testaspects.csv` enthält zusätzlich die Spalten `Fehler Testrun`, `Tickets`, `Verantwortlich` und
+`Scenarios`.
+Wenn eine AFO- oder Testaspekt-Zeile mindestens ein bestandenes und mindestens ein fehlgeschlagenes Szenario enthält, wird der
+`Laufzeit-Status` als `teilweise fehlgeschlagen` ausgegeben.
+
+Spalten:
+
+- `Zuordnung`: Granularität der Zuordnung.
+  `Szenario` passt nur auf konkrete fehlgeschlagene Szenarien.
+  `Testaspekt` passt auf rote Zeilen eines Testaspekts und auf AFO-Zeilen mit roten Szenarien dieses Testaspekts.
+  `Anforderung` passt auf rote AFO-Zeilen und ist der gröbste Fallback.
+- `Anforderung`: AFO-ID, z. B. `A_25663`.
+  Für `Testaspekt` und `Szenario` sollte die zugehörige AFO gesetzt werden, damit die Zuordnung eindeutig bleibt.
+- `Testaspekt`: TA-ID, z. B. `TA_A_25663_01`.
+  Für `Szenario` und `Testaspekt` setzen.
+  Für reine AFO-Fallbacks leer lassen.
+- `Feature`: Feature-Pfad für `Szenario`-Zuordnungen.
+  Relative Pfade wie `src/test/resources/features/.../example.feature` sind ausreichend.
+  Für `Testaspekt` und `Anforderung` leer lassen.
+- `Szenario`: Exakter Szenarioname aus der `.feature`-Datei oder dem Cucumber-Report.
+  Nur für `Szenario`-Zuordnungen setzen.
+- `Tickets`: Ticket-IDs oder URLs, mehrere Einträge mit Semikolon trennen, z. B. `ZETA-1234;ZETA-5678`.
+- `Verantwortlich`: Verantwortliche Partei für Nachverfolgung oder Klärung, z. B. Teamname, Hersteller, Komponente oder Ansprechpartner.
+  Diese Spalte wird in die Laufzeit-CSV-Ausgabe übernommen.
+
 ### Skript: ZETA AFOs aus gemVZ XML erzeugen
 
 ```bash
-uv run --project docs/scripts generate-zeta-afos --input-xml docs/gemVZ_Afo_ZETA_Guard_V_1.2.1-0_V1.0.0_CC.xml --output-dir docs/asciidoc/afos/gemSpec_ZETA --force
+uv run --project docs/scripts generate-zeta-afos --input-xml docs/gemVZ_Afo_ZETA_Guard_V_1.3.0-0_V1.0.0.xml --output-dir docs/asciidoc/afos --force
 ```
 
 Parameter:
 
 - `--input-xml`: Pfad zur eingecheckten gemVZ ZETA Guard XML-Datei (Standard:
-  `docs/gemVZ_Afo_ZETA_Guard_V_1.2.1-0_V1.0.0_CC.xml`).
+  `docs/gemVZ_Afo_ZETA_Guard_V_1.3.0-0_V1.0.0.xml`).
 - `--output-dir`: Zielverzeichnis für die generierten Anforderungen (Standard:
-  `docs/asciidoc/afos/gemSpec_ZETA`)
+  `docs/asciidoc/afos`)
 - `--test-procedure`: Filter auf `<testProcedure>` (Standard:
   `Festlegungen zur funktionalen Eignung "Produkttest/Produktübergreifender Test"`); leer lassen, um
   alle Anforderungen zu erzeugen
 - `--[no-]readme`: Optional `readme.adoc` in `docs/asciidoc/afos` aktualisieren (Standard: aktiv)
 - `--force`: Bestehendes Zielverzeichnis vorab löschen
 
-Das Skript legt pro Anforderung eine `A_*.adoc` mit Anker und Titel an und kann optional ein `readme.adoc` mit den Quell-Dokumenten und allen Includes erstellen.
+Das Skript legt pro Anforderung eine `A_*.adoc` mit Anker und Titel an und kann optional ein `readme.adoc` mit den Quell-Dokumenten und
+allen Includes erstellen.
+Dabei werden auch die Quellenliste in `docs/asciidoc/afos/readme.adoc` sowie die Referenzen in `docs/asciidoc/chapters/02_referenzen.adoc`
+und `docs/asciidoc/chapters/03_einleitung.adoc` aus der XML-Snapshot-Datei aktualisiert.
 Neue gemVZ-Quellstände werden zuerst in eine versionierte XML-Snapshot-Datei überführt und anschließend über dieses Skript verarbeitet.
+
+### Skript: MASVS-Tags aus AFO/MASVS-CSV anwenden und prüfen
+
+Das Skript erwartet eine CSV mit den Spalten `AFO` und `MASVS`.
+Die CSV kann aus der AFO/MASVS-Zuordnung des Sicherheitstestplans erstellt werden.
+`MASVS` darf entweder als Kategorie (`AUTH`) oder als Tag (`MASVS-AUTH`) angegeben werden.
+
+```bash
+uv run --project docs/scripts tag-masvs-scenarios --mapping-csv docs/masvs_mapping.csv
+```
+
+Zur formalen Prüfung ohne Schreibzugriff:
+
+```bash
+uv run --project docs/scripts tag-masvs-scenarios --mapping-csv docs/masvs_mapping.csv --check
+```
+
+Die Prüfung beweist die Postbedingung, dass jedes geparste Szenario oder Beispiel mit gemapptem AFO-Tag alle zugehörigen `@MASVS-*`-Tags
+trägt.
+Diese Prüfung läuft auch im GitLab-Job `traceability`, bevor die Testplan-Tabellen generiert werden.
+Die generierte MASVS-Abdeckung im Testplan wird anschließend durch das Skript `traceability` aus der CSV und den Feature-Tags abgeleitet.
 
 ### Skript: [fetch_youtrack_testaspects.py](src/testsuite_docs/fetch_youtrack_testaspects.py)
 
@@ -216,6 +294,7 @@ Hinweise:
 - Die JSON-Ausgabe ist UTF-8-freundlich und enthält `duration_seconds` für die Wall-Clock-Laufzeit.
 - Titeländerungen werden zusätzlich als `cosmetic` oder `substantive` klassifiziert.
 - Szenario-Tags werden immer verarbeitet (TA-Tag vorhanden → schließen, entfernt → wieder öffnen).
-- Issues mit Label `entfällt` werden nicht wieder geöffnet; das Skript versucht in GitLab zusätzlich den Status `Won't do` zu setzen und fällt sonst auf `closed` zurück.
+- Issues mit Label `entfällt` werden nicht wieder geöffnet; das Skript versucht in GitLab zusätzlich den Status `Won't do` zu setzen und
+  fällt sonst auf `closed` zurück.
 - GitLab.com unterstützt das Statusfeld „In progress/Done“ nicht per API-Update; das Skript nutzt open/close.
 - Tokenquelle: `/tmp/gitlab_token`, `GITLAB_TOKEN` oder `CI_JOB_TOKEN`.

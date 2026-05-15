@@ -39,7 +39,10 @@ import de.gematik.zeta.services.model.ZetaDeploymentDetails;
 import de.gematik.zeta.services.model.ZetaDisableAslRequest;
 import de.gematik.zeta.services.model.ZetaEnableAslRequest;
 import de.gematik.zeta.services.model.ZetaPoppTokenToggleRequest;
+import de.gematik.zeta.services.model.ZetaPoppTokenValidityRequest;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -162,6 +165,77 @@ public class ZetaDeploymentConfigurationServiceTest {
 
     enableResult = service.enablePoppVerification(details, request, "/");
     assertEquals(0, enableResult.commandResult().exitCode());
+  }
+
+  /**
+   * Verifies that PoPP token validity modification patches the nginx ConfigMap and restarts the PEP pod.
+   *
+   * @throws IOException if temporary patch file handling fails unexpectedly
+   * @throws InterruptedException if pod restart waiting is interrupted
+   * @throws TimeoutException if pod readiness waiting exceeds the timeout
+   */
+  @Test
+  public void setPoppTokenValidityReplacesExistingDirective() throws IOException, InterruptedException, TimeoutException {
+    String nginxConfig = """
+        pep_pdp_issuer https://zeta-kind.local/auth/realms/zeta-guard;
+        pep_popp_issuer http://popp-statics;
+        pep_popp_validity "quarter";
+        location /pep/ {
+            pep_require_popp      on;
+        }
+        """;
+    String originalConfigMapYaml = """
+        apiVersion: v1
+        metadata:
+          name: pep-test-nginx-conf
+        data:
+          nginx.conf: |
+            pep_popp_validity "quarter";
+        """;
+    FakeZetaDeploymentConfigurationService fakeService = new FakeZetaDeploymentConfigurationService(
+        new CommandResult(List.of("kubectl"), 0, nginxConfig, ""),
+        new CommandResult(List.of("kubectl"), 1, "", "Error from server (NotFound)"),
+        new CommandResult(List.of("kubectl"), 0, originalConfigMapYaml, ""),
+        new CommandResult(List.of("kubectl"), 0, "configmap/pep-test-nginx-conf-tiger-original-backup created", ""),
+        new CommandResult(List.of("kubectl"), 0, "configmap/pep-test-nginx-conf patched", ""),
+        new CommandResult(List.of("kubectl"), 0, "pep-deployment-old 1/1 Running", ""),
+        new CommandResult(List.of("kubectl"), 0, "pod/pep-deployment-old deleted", ""),
+        new CommandResult(List.of("kubectl"), 0, "pep-deployment-new 1/1 Running", ""),
+        new CommandResult(List.of("kubectl"), 0, "true", "")
+    );
+    var request = new ZetaPoppTokenValidityRequest(
+        "pep_popp_validity\\s+\"[^\"]+\"\\s*;",
+        "pep_popp_issuer\\s+[^;]+;",
+        "pep_popp_validity \"%s\";");
+
+    KubectlPatchCommandResult result = fakeService.setPoppTokenValidity(details, request, "300s");
+
+    assertEquals(0, result.commandResult().exitCode());
+    assertEquals(9, fakeService.commands.size());
+    assertEquals(Arrays.asList("-n", "zeta-local", "get", "configmap",
+        "pep-test-nginx-conf", "-o=jsonpath='{.data.nginx\\.conf}'"), fakeService.commands.getFirst());
+    assertTrue(fakeService.patchFileContents.stream()
+        .anyMatch(content -> content.contains("pep_popp_validity \\\"300s\\\";")));
+  }
+
+  /**
+   * Verifies that invalid PoPP token validity values are rejected before any kubectl call is made.
+   *
+   * @throws IOException if temporary patch file handling fails unexpectedly
+   * @throws InterruptedException if pod restart waiting is interrupted
+   * @throws TimeoutException if pod readiness waiting exceeds the timeout
+   */
+  @Test
+  public void setPoppTokenValidityRejectsInvalidValue() throws IOException, InterruptedException, TimeoutException {
+    FakeZetaDeploymentConfigurationService fakeService = new FakeZetaDeploymentConfigurationService();
+    var request = new ZetaPoppTokenValidityRequest(
+        "pep_popp_validity\\s+\"[^\"]+\"\\s*;",
+        "pep_popp_issuer\\s+[^;]+;",
+        "pep_popp_validity \"%s\";");
+
+    Assert.assertThrows(IllegalArgumentException.class,
+        () -> fakeService.setPoppTokenValidity(details, request, "300; pep off"));
+    assertTrue(fakeService.commands.isEmpty());
   }
 
   @Test
@@ -749,6 +823,7 @@ public class ZetaDeploymentConfigurationServiceTest {
     private final Queue<CommandResult> responses = new ArrayDeque<>();
     private final List<List<String>> commands = new ArrayList<>();
     private final List<Boolean> logStderrFlags = new ArrayList<>();
+    private final List<String> patchFileContents = new ArrayList<>();
 
     /**
      * Creates a fake deployment configuration service with pre-seeded command results.
@@ -795,11 +870,29 @@ public class ZetaDeploymentConfigurationServiceTest {
     private CommandResult recordCommand(List<String> arguments, boolean logStderr) {
       commands.add(List.copyOf(arguments));
       logStderrFlags.add(logStderr);
+      capturePatchFileContent(arguments);
       CommandResult next = responses.poll();
       if (next == null) {
         throw new AssertionError("No fake command result configured for arguments: " + arguments);
       }
       return next;
+    }
+
+    /**
+     * Reads patch file content before production code deletes the temporary file.
+     *
+     * @param arguments kubectl arguments that may contain a patch file reference
+     */
+    private void capturePatchFileContent(List<String> arguments) {
+      var patchFileIndex = arguments.indexOf("--patch-file");
+      if (patchFileIndex < 0 || patchFileIndex + 1 >= arguments.size()) {
+        return;
+      }
+      try {
+        patchFileContents.add(Files.readString(Path.of(arguments.get(patchFileIndex + 1))));
+      } catch (IOException e) {
+        throw new AssertionError("Could not read generated patch file", e);
+      }
     }
 
     /**

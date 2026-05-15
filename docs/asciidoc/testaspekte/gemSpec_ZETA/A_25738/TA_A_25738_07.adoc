@@ -1,7 +1,7 @@
 [#TA_A_25738_07]
 ===== TA_A_25738_07 - PDP Client-Registrierung - Telemetrie - Faktor Nutzerauthentifizierung - Digitale Identität
 
-Die Komponente Authorization Server MUSS in den Telemetrie-Daten zu jeder versuchten Clientregistrierung folgende Parameter ohne einen Nutzerbezug protokollieren:
+Die Komponente Authorization Server MUSS in den Telemetriedaten zu jeder versuchten Client-Registrierung folgende Parameter ohne einen Nutzerbezug protokollieren:
 
 * Clientparameter (Betriebssystem(-version), Patchlevel, Geolocation etc.) gemäß Clienteattestierung
 * verwendeter Faktor für Offband-Verifikation (E-Mail)

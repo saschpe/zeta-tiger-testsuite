@@ -1,5 +1,6 @@
 # YAML Schema for a PoPP Token according to gematik specification
 # Based on gemSpec_PoPP_Service_V1.0.0
+# see https://github.com/gematik/api-popp/blob/main/src/openapi/I_PoPP_Token_Generation.yaml
 $schema: "http://json-schema.org/draft-07/schema#"
 title: PoPP Token
 description: Schema for a PoPP Token as defined in gematik specification.
@@ -15,20 +16,35 @@ properties:
         description: Type of the token.
       alg:
         type: string
-        description: The algorithm used to sign the token. Currently only ES256 is supported.
+        description: |
+          The algorithm used to sign the token. Currently only ES256 is 
+          supported.
         enum:
           - ES256
+      kid:
+        type: string
+        description: |
+          The key identifier of the key used to sign the token. 
+          Key itself can be retrieved from the JWK endpoint of the PoPP
+          server.
       x5c:
         type: array
-        description: Contains the certificate chain. The first certificate must be the leaf certificate containing the public key for verifying the signature. It must be base64-der-encoded.
+        description: |
+          Contains the certificate chain. The first certificate must be 
+          the leaf certificate containing the public key for verifying 
+          the signature. It must be base64-der-encoded.
         items:
           type: string
           format: byte # Represents base64 encoded data
-        minItems: 1
     required:
       - typ
       - alg
-      - x5c
+      - kid
+    examples:
+      - typ: "vnd.telematik.popp+jwt"
+        alg: "ES256"
+        kid: "x_vW4LVDipvu8iUQ5alKsZLWtH6jh4eJ4c5offXtMV0"
+
   payload:
     type: object
     description: The JWT Claims Set of the PoPP-Token.
@@ -145,6 +161,3 @@ properties:
         insurerId: "123456789"
         actorId: "1-2012345678"
         actorProfessionOid: "1.2.276.0.76.4.50"
-required:
-  - header
-  - payload

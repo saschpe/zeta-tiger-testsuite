@@ -40,7 +40,7 @@ public class NonceSteps {
    * @param length expected length of the decoded nonce
    * @throws AssertionError if the nonce is not Base64Url encoded or the length is not correct
    */
-  @Dann("decodiere Base64Url {tigerResolvedString} und prüfe das die Länge {int} bit ist")
+  @Dann("decodiere Base64Url {tigerResolvedString} und prüfe, dass die Länge {int} bit ist")
   @And("decode Base64Url {tigerResolvedString} and check that the length is {int} bit")
   public void validateBase64UrlEncodedNonce(String nonce, int length) throws AssertionError {
     try {
