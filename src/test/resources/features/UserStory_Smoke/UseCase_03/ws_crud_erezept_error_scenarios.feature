@@ -24,16 +24,16 @@
 
 #language:de
 
-@websocket
-@stomp
-@no_proxy
 @UseCase_Smoke_03
-@dev
+@critical
+@no_proxy
+@stomp
+@websocket
 Funktionalität: WebSocket/STOMP - E-Rezept Fehlerbehandlung und Grenzfälle
 
   Grundlage:
     Und setze Anfrage Timeout für WebSocket Verbindungen auf 5 Sekunden
-    Und setze Timeout für WebSocket Nachrichten auf 5 Sekunden
+    Und setze Timeout für WebSocket Nachrichten auf 10 Sekunden
 
   Szenario: CREATE - Doppelte PrescriptionId gibt Konflikt zurück
     Gegeben sei TGR setze lokale Feature Variable "uniquePrescriptionId" auf "RX-WS-ERROR-${free.port.50}"

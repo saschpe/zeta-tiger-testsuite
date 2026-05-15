@@ -10,7 +10,7 @@ Tabelle #: id_token_Nutzer-Daten
 | **id_token claims (gemäß [gemSpec_IDP_Sek])**   | **Nutzer-Daten gemäß [zeta-user-info.yaml]**   | **Beschreibung**                                      |
 | urn:telematik:claims:id                               | identifier                                | für Versicherte der unveränderliche Anteil der KVNR   |
 | urn:telematik:claims:profession                       | professionOID                             | OID für Versicherte                                   |
-| urn:telematik:display_name                            | commonName                                | Vollständiger Name des Versicherten                   |
+| urn:telematik:claims:id                               | commonName                                | für Versicherte der unveränderliche Anteil der KVNR   |
 
 |===
 

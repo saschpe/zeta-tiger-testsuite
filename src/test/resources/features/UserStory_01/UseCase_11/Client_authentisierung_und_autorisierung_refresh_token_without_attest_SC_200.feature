@@ -31,20 +31,27 @@ Funktionalität: Client_authentisierung_und_autorisierung_refresh_token_without_
     # TTL-Werte als Variablen definieren (in Sekunden)
     Und TGR setze lokale Variable "accessTokenTtl" auf "5"
 
-  @dev
   @A_25660
   @A_25662
   @A_25782
+  @A_26281-01
   @TA_A_25660_01
   @TA_A_25660_04
   @TA_A_25662_01
   @TA_A_25662_02
   @TA_A_25782_05
+  @TA_A_26281-01_01
+  @MASVS-AUTH
+  @MASVS-CRYPTO
   Szenario: Refresh Token Rotation - Token wird nur einmal verwendet und rotiert
+    Gegeben sei TGR sende eine leere "GET" Anfrage an "${paths.guard.baseUrl}${paths.guard.certsEndpointPath}"
+    Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.guard.certsEndpointPath}"
+    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "200"
+    Und TGR speichere Wert des Knotens "$.body" der aktuellen Antwort in der Variable "KEY_STORE"
     # SCHRITT 1: expires_in Manipulation aktivieren BEVOR der erste HelloZeta Request
     # 3 Ausführungen: Initial Token Exchange + 2 Refreshes
-    Wenn TGR setze lokale Variable "condition" auf "isResponse && request.path =~ '.*${paths.guard.tokenEndpointPath}'"
-    Dann Setze im TigerProxy für die Nachricht "${condition}" die Manipulation auf Feld "$.body.expires_in" und Wert "${accessTokenTtl}" und 3 Ausführungen
+    Wenn TGR setze lokale Variable "opaCondition" auf "isResponse && request.path =~ '.*${paths.opa.decisionPath}'"
+    Dann Setze im TigerProxy für die Nachricht "${opaCondition}" die Manipulation auf Feld "$.body.result.ttl.access_token" und Wert "${accessTokenTtl}" und 3 Ausführungen
 
     # Setup: Client zurücksetzen und ersten Access Token holen
     Gegeben sei TGR sende eine leere GET Anfrage an "${paths.client.reset}"
@@ -61,6 +68,9 @@ Funktionalität: Client_authentisierung_und_autorisierung_refresh_token_without_
     Und TGR prüfe aktuelle Antwort enthält Knoten "$.body.refresh_token"
     Und TGR speichere Wert des Knotens "$.body.refresh_token" der aktuellen Antwort in der Variable "firstRefreshToken"
     Und TGR speichere Wert des Knotens "$.body.access_token" der aktuellen Antwort in der Variable "firstAccessToken"
+
+    Und verifiziere die ES256 Signatur des JWT "${firstAccessToken}" mit KeyStore "${KEY_STORE}"
+    Und verifiziere die ES256 Signatur des JWT "${firstRefreshToken}" mit KeyStore "${KEY_STORE}"
 
     # Nachrichten löschen damit wir nach dem Refresh nur den Refresh-Request finden
     Und TGR lösche aufgezeichnete Nachrichten
@@ -95,6 +105,8 @@ Funktionalität: Client_authentisierung_und_autorisierung_refresh_token_without_
     Und TGR prüfe aktuelle Antwort enthält Knoten "$.body.access_token"
     Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.body.access_token" nicht überein mit "${firstAccessToken}"
     Und TGR speichere Wert des Knotens "$.body.access_token" der aktuellen Antwort in der Variable "secondAccessToken"
+    Und verifiziere die ES256 Signatur des JWT "${secondRefreshToken}" mit KeyStore "${KEY_STORE}"
+    Und verifiziere die ES256 Signatur des JWT "${secondAccessToken}" mit KeyStore "${KEY_STORE}"
 
     # TA_A_25662_01: Validiere dass das rotierte RT tatsächlich verwendbar ist (mehrfache Rotation)
     # Nachrichten löschen damit wir nach dem Refresh nur den Refresh-Request finden
@@ -120,29 +132,39 @@ Funktionalität: Client_authentisierung_und_autorisierung_refresh_token_without_
     # TA_A_25662_01: Erneute Rotation - drittes RT und AT unterscheiden sich vom zweiten Paar
     Und TGR prüfe aktuelle Antwort enthält Knoten "$.body.refresh_token"
     Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.body.refresh_token" nicht überein mit "${secondRefreshToken}"
+    Und TGR speichere Wert des Knotens "$.body.refresh_token" der aktuellen Antwort in der Variable "thirdRefreshToken"
     Und TGR prüfe aktuelle Antwort enthält Knoten "$.body.access_token"
     Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.body.access_token" nicht überein mit "${secondAccessToken}"
+    Und TGR speichere Wert des Knotens "$.body.access_token" der aktuellen Antwort in der Variable "thirdAccessToken"
+    Und verifiziere die ES256 Signatur des JWT "${thirdRefreshToken}" mit KeyStore "${KEY_STORE}"
+    Und verifiziere die ES256 Signatur des JWT "${thirdAccessToken}" mit KeyStore "${KEY_STORE}"
 
 
-  @dev
   @A_25660
   @A_25760
+  @A_25782
   @A_26586
+  @A_26587-01
   @A_26972-02
+  @A_28837
+  @TA_A_26586_02
+  @TA_A_26587-01_01
   @TA_A_25660_04
   @TA_A_25660_05
   @TA_A_25760_03
   @TA_A_25782_04
-  @TA_A_26586_02
   @TA_A_26972-02_01
   @TA_A_26972-02_02
   @TA_A_26972-02_03
   @TA_A_26972-02_04
+  @TA_A_28837_01
+  @dev
+  @MASVS-AUTH
   Szenario: Session Management - Ausgabe und Verwaltung von Refresh Token
     # expires_in Manipulation aktivieren BEVOR der erste HelloZeta Request
     # 2 Ausführungen: Initial Token Exchange + 1 Refresh
-    Wenn TGR setze lokale Variable "condition" auf "isResponse && request.path =~ '.*${paths.guard.tokenEndpointPath}'"
-    Dann Setze im TigerProxy für die Nachricht "${condition}" die Manipulation auf Feld "$.body.expires_in" und Wert "${accessTokenTtl}" und 2 Ausführungen
+    Wenn TGR setze lokale Variable "opaCondition" auf "isResponse && request.path =~ '.*${paths.opa.decisionPath}'"
+    Dann Setze im TigerProxy für die Nachricht "${opaCondition}" die Manipulation auf Feld "$.body.result.ttl.access_token" und Wert "${accessTokenTtl}" und 2 Ausführungen
 
     # Setup: Client zurücksetzen und Token holen (mit expires_in durch Manipulation)
     Gegeben sei TGR sende eine leere GET Anfrage an "${paths.client.reset}"
@@ -161,8 +183,23 @@ Funktionalität: Client_authentisierung_und_autorisierung_refresh_token_without_
     Und TGR prüfe aktuelle Antwort enthält Knoten "$.body.refresh_expires_in"
     Und TGR speichere Wert des Knotens "$.body.access_token" der aktuellen Antwort in der Variable "firstAccessToken"
     Und TGR speichere Wert des Knotens "$.body.refresh_token" der aktuellen Antwort in der Variable "firstRefreshToken"
+    # TA_A_26587-01_01: PDP Datenbank - Kompatibilität zum Authorization Server über persistente Session-, Nutzer- und Client-Daten
+    Und decodiere und validiere "${firstAccessToken}" gegen Schema "schemas/v_1_0/access-token.yaml"
+    Und TGR prüfe aktuelle Antwort enthält Knoten "$.body.access_token.body.sid"
+    Und TGR prüfe aktuelle Antwort enthält Knoten "$.body.refresh_token.body.sid"
+    Und TGR speichere Wert des Knotens "$.body.access_token.body.sid" der aktuellen Antwort in der Variable "sessionId"
+    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.body.refresh_token.body.sid" überein mit "${sessionId}"
+    Und TGR prüfe aktuelle Antwort enthält Knoten "$.body.access_token.body.sub"
+    Und TGR speichere Wert des Knotens "$.body.access_token.body.sub" der aktuellen Antwort in der Variable "subject"
+    Und TGR prüfe aktuelle Antwort enthält Knoten "$.body.access_token.body.client_id"
+    Und TGR speichere Wert des Knotens "$.body.access_token.body.client_id" der aktuellen Antwort in der Variable "clientId"
+    Und TGR prüfe aktuelle Antwort enthält Knoten "$.body.refresh_token.body.exp"
+    Und TGR prüfe aktuelle Antwort enthält Knoten "$.body.access_token.body.jti"
+    Und TGR prüfe aktuelle Antwort enthält Knoten "$.body.refresh_token.body.jti"
+    Und TGR speichere Wert des Knotens "$.body.access_token.body.jti" der aktuellen Antwort in der Variable "accessTokenJti1"
+    Und TGR speichere Wert des Knotens "$.body.refresh_token.body.jti" der aktuellen Antwort in der Variable "refreshTokenJti1"
     Und TGR speichere Wert des Knotens "$.body.subject_token" der aktuellen Anfrage in der Variable "SUBJECT_TOKEN"
-    Und decodiere und validiere "${SUBJECT_TOKEN}" gegen Schema "schemas/v_1_0/smb-id-token-jwt.yaml"
+    Und decodiere und validiere "${SUBJECT_TOKEN}" gegen Schema "schemas/v_1_0/subject-token-smb.yaml"
     Und TGR speichere Wert des Knotens "$.body.subject_token.header.x5c.0" der aktuellen Anfrage in der Variable "smcbCertificate"
     Und schreibe Daten aus dem SMC-B Zertifikat "${smcbCertificate}" in die Variable "SMCB-INFO"
 
@@ -190,6 +227,13 @@ Funktionalität: Client_authentisierung_und_autorisierung_refresh_token_without_
     Und TGR prüfe aktueller Request stimmt im Knoten "$.body.refresh_token" überein mit "${firstRefreshToken}"
     # TA_A_26972-02: Refresh ohne erneutes Subject-Token (Persistenz-Indiz)
     Und TGR prüfe aktueller Request enthält nicht Knoten "$.body.subject_token"
+    # TA_A_26587-01_01: Validiere kompatible Fortführung der Session-Daten und Rotation der Token-IDs nach Refresh
+    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.body.access_token.body.sid" überein mit "${sessionId}"
+    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.body.refresh_token.body.sid" überein mit "${sessionId}"
+    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.body.access_token.body.sub" überein mit "${subject}"
+    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.body.access_token.body.client_id" überein mit "${clientId}"
+    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.body.access_token.body.jti" nicht überein mit "${accessTokenJti1}"
+    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.body.refresh_token.body.jti" nicht überein mit "${refreshTokenJti1}"
 
     # TA_A_25660_05: Verwaltung bedeutet Rotation - neue Tokens müssen unterschiedlich sein
     Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.body.access_token" nicht überein mit "${firstAccessToken}"
@@ -199,7 +243,7 @@ Funktionalität: Client_authentisierung_und_autorisierung_refresh_token_without_
     Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.opa.decisionPath}"
     Und TGR prüfe aktueller Request enthält Knoten "$.body.input.user_info"
     Und TGR speichere Wert des Knotens "$.body.input.user_info" der aktuellen Anfrage in der Variable "OPA_USER_INFO"
-    Und validiere "${OPA_USER_INFO}" soft gegen Schema "schemas/v_1_0/zeta-user-info.yaml"
+    Und validiere "${OPA_USER_INFO}" gegen Schema "schemas/v_1_0/zeta-user-info.yaml"
     # TA_A_26972-02_01 identifier
     Und TGR prüfe aktueller Request stimmt im Knoten "$.body.input.user_info.identifier" überein mit "${SMCB-INFO.telematikId}"
     # TA_A_26972-02_02 commonName
@@ -215,12 +259,14 @@ Funktionalität: Client_authentisierung_und_autorisierung_refresh_token_without_
     # TA_A_26972-02_04 optional organizationName
     Und prüfe optional: Knoten "${headers.authorization.dpopToken.body.organization_name}" fehlt wenn "${SMCB-INFO.organizationName}" leer ist, sonst gleich und nutze soft assert
 
-  @dev
   @A_25663
   @A_25766
   @TA_A_25663_01
   @TA_A_25663_02
   @TA_A_25766_02
+  @dev
+  @MASVS-CRYPTO
+  @MASVS-AUTH
   Szenario: DPoP Token Binding für Access und Refresh Token
     # TA_A_25663_01 + TA_A_25663_02: Token-Binding an Client-Registrierung für AT und RT
     #
@@ -234,8 +280,8 @@ Funktionalität: Client_authentisierung_und_autorisierung_refresh_token_without_
     # 4. Siehe auch Negativtest: Refresh mit anderem DPoP Key → 401
 
     # expires_in manipulieren um Refresh zu erzwingen (2 Ausführungen: Initial + Refresh)
-    Wenn TGR setze lokale Variable "condition" auf "isResponse && request.path =~ '.*${paths.guard.tokenEndpointPath}'"
-    Dann Setze im TigerProxy für die Nachricht "${condition}" die Manipulation auf Feld "$.body.expires_in" und Wert "${accessTokenTtl}" und 2 Ausführungen
+    Wenn TGR setze lokale Variable "opaCondition" auf "isResponse && request.path =~ '.*${paths.opa.decisionPath}'"
+    Dann Setze im TigerProxy für die Nachricht "${opaCondition}" die Manipulation auf Feld "$.body.result.ttl.access_token" und Wert "${accessTokenTtl}" und 2 Ausführungen
 
     Gegeben sei TGR sende eine leere GET Anfrage an "${paths.client.reset}"
     Und TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
@@ -301,143 +347,17 @@ Funktionalität: Client_authentisierung_und_autorisierung_refresh_token_without_
     Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.body.refresh_token.body.cnf.jkt" überein mit "${dpopJktFirstRequest}"
 
 
-  @dev
-  @A_25662
-  @A_25782
-  @A_26662
-  @TA_A_25662_02
-  @TA_A_25782_05
-  @TA_A_26662_01
-  Szenario: Refresh Token Reuse wird vom Authorization Server abgelehnt (Negativtest)
-    # expires_in Manipulation aktivieren BEVOR der erste HelloZeta Request
-    # (3 Ausführungen: Initial Token Exchange + 1. Refresh + 2. Refresh, alle mit manipuliertem expires_in)
-    Wenn TGR setze lokale Variable "condition" auf "isResponse && request.path =~ '.*${paths.guard.tokenEndpointPath}'"
-    Dann Setze im TigerProxy für die Nachricht "${condition}" die Manipulation auf Feld "$.body.expires_in" und Wert "${accessTokenTtl}" und 3 Ausführungen
-
-    Und TGR sende eine leere GET Anfrage an "${paths.client.reset}"
-    Und TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
-
-    # Warten dass HelloZeta-Response vollständig geparst ist
-    Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.client.helloZetaPath}"
-    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "200"
-
-    # Refresh Token aus dem Token Exchange speichern
-    Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.guard.tokenEndpointPath}"
-    Und TGR speichere Wert des Knotens "$.body.refresh_token" der aktuellen Antwort in der Variable "usedRefreshToken"
-
-    # Nachrichten löschen damit wir nach dem Refresh nur den Refresh-Request finden
-    Und TGR lösche aufgezeichnete Nachrichten
-
-    # Warte bis Access Token abgelaufen ist
-    Und warte "${accessTokenTtl}" Sekunden
-
-    # Ersten Refresh durchführen (verwendet usedRefreshToken)
-    Und TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
-    Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.client.helloZetaPath}"
-    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "200"
-
-    # Verifiziere dass der Refresh mit dem gespeicherten Token erfolgte (jetzt einziger Token Request)
-    Dann TGR finde die letzte Anfrage mit Pfad "${paths.guard.tokenEndpointPath}" und Knoten "$.body.grant_type" der mit "refresh_token" übereinstimmt
-    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "200"
-    Und TGR prüfe aktueller Request stimmt im Knoten "$.body.refresh_token" überein mit "${usedRefreshToken}"
-
-    # Versuche das bereits verwendete Refresh Token nochmal zu verwenden
-    # Manipuliere den Request, um das alte Refresh Token zurückzuspielen
-    # Hinweis: Token Request Body ist application/x-www-form-urlencoded (Form-Data), nicht JSON
-    # TigerProxy hat keinen RbelHttpFormDataWriter, daher muss Regex auf $.body verwendet werden
-    Wenn TGR setze lokale Variable "replayCondition" auf "isRequest && request.path =~ '.*${paths.guard.tokenEndpointPath}'"
-    Dann Setze im TigerProxy für die Nachricht "${replayCondition}" die Regex-Manipulation auf Feld "$.body" mit Regex "refresh_token=[^&]*" und Wert "refresh_token=${usedRefreshToken}"
-
-    Und TGR lösche aufgezeichnete Nachrichten
-
-    # Zweiter Refresh-Versuch sollte fehlschlagen
-    Und warte "${accessTokenTtl}" Sekunden
-    Und TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
-    Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.client.helloZetaPath}"
-
-    # Finde den Refresh Token Request (nicht den Token Exchange der danach folgt)
-    # Wir suchen explizit nach dem Request mit grant_type=refresh_token
-    Dann TGR finde die letzte Anfrage mit Pfad "${paths.guard.tokenEndpointPath}" und Knoten "$.body.grant_type" der mit "refresh_token" übereinstimmt
-    Und TGR prüfe aktueller Request stimmt im Knoten "$.body.refresh_token" überein mit "${usedRefreshToken}"
-
-    # Erwarte invalid_grant
-    # Grund: Refresh Token wurde bereits verwendet (Rotation-Verletzung)
-    # Die Response zu diesem Request sollte 400 mit invalid_grant sein
-    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "400"
-    Und TGR prüfe aktuelle Antwort enthält Knoten "$.body.error"
-    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.body.error" überein mit "invalid_grant"
-    # Zusätzliche Schema-Validierung
-    Und TGR speichere Wert des Knotens "$.body" der aktuellen Antwort in der Variable "errorBody"
-    Und validiere "${errorBody}" gegen Schema "schemas/v_1_0/zeta-error.yaml"
-
-
-  @dev
-  @A_25663
-  @TA_A_25663_02
-  Szenario: Refresh Token Binding - Refresh mit anderem DPoP Key scheitert (Negativtest)
-    # TA_A_25663_02: Dieser Test verifiziert die DPoP Refresh Token Binding Anforderung
-    # Testszenario: Angreifer stiehlt Refresh Token, hat aber eigenen (anderen) DPoP Key
-    # Erwartetes Verhalten: Token-Endpoint MUSS mit 401 Unauthorized antworten
-
-    # SCHRITT 1: Erste Session erstellen (Attacker-Session) und DPoP-Key speichern
-    Gegeben sei TGR sende eine leere GET Anfrage an "${paths.client.reset}"
-    Und TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
-
-    # Warten dass HelloZeta-Response vollständig geparst ist
-    Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.client.helloZetaPath}"
-    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "200"
-
-    # Attacker-Key aus Storage holen
-    Gegeben sei TGR sende eine leere GET Anfrage an "${paths.client.storage}"
-    Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.client.storagePath}"
-    Und TGR speichere Wert des Knotens "$.body.dpop_private_key" der aktuellen Antwort in der Variable "attackerDpopKey"
-
-    # expires_in auf 5 Sekunden setzen um Refresh zu erzwingen (nur 1 Ausführung für Victim-Session)
-    Wenn TGR setze lokale Variable "condition" auf "isResponse && request.path =~ '.*${paths.guard.tokenEndpointPath}'"
-    Dann Setze im TigerProxy für die Nachricht "${condition}" die Manipulation auf Feld "$.body.expires_in" und Wert "${accessTokenTtl}" und 1 Ausführungen
-
-    # SCHRITT 2: Neue Session erstellen (Victim-Session mit neuem DPoP Key)
-    # Der Refresh Token dieser Session ist an den NEUEN DPoP Key gebunden (via jkt Claim)
-    Gegeben sei TGR sende eine leere GET Anfrage an "${paths.client.reset}"
-    Und TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
-
-    # Warten dass HelloZeta-Response vollständig geparst ist
-    Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.client.helloZetaPath}"
-    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "200"
-
-    # Nachrichten löschen damit wir nach dem Refresh nur den Refresh-Request finden
-    Und TGR lösche aufgezeichnete Nachrichten
-
-    # SCHRITT 3: Manipulation aktivieren - DPoP-Proof mit ATTACKER-Key signieren und JWK ersetzen
-    # RFC 9449: "such a client MUST present a DPoP proof for the same key that was used to
-    #           obtain the refresh token each time that refresh token is used"
-    # Dieser Test verletzt diese Anforderung absichtlich mit einem anderen Key
-    Wenn TGR setze lokale Variable "dpopCondition" auf "isRequest && request.path =~ '.*${paths.guard.tokenEndpointPath}'"
-    Dann Setze im TigerProxy für JWT in "${headers.dpop.root}" das Feld "body.jti" auf Wert "attacker-jti" mit privatem Schlüssel "${attackerDpopKey}" für Pfad "${dpopCondition}" und 1 Ausführungen und ersetze JWK
-
-    Und TGR lösche aufgezeichnete Nachrichten
-
-    # Warte auf Token Expiry und Trigger Refresh
-    Und warte "${accessTokenTtl}" Sekunden
-    Und TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
-
-    # Vorladen der Nachrichten, damit die nachfolgende Suche nach dem manipulierten Wert schneller durchläuft
-    Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.guard.tokenEndpointPath}"
-
-    # VERIFIZIERUNG: Token-Endpoint MUSS Refresh mit falschem DPoP-Key ablehnen
-    # Erwarteter Fehler: 401 Unauthorized (DPoP Key Thumbprint != jkt im gebundenen Refresh Token)
-    Dann TGR finde die letzte Anfrage mit Pfad "${paths.guard.tokenEndpointPath}" und Knoten "${headers.dpop.body.jti}" der mit "attacker-jti" übereinstimmt
-    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "401"
-
   @A_25660
   @A_27867-01
   @TA_A_25660_02
   @TA_A_27867-01_01
+  @critical
+  @MASVS-AUTH
   Szenario: Session-Daten werden verwaltet (indirekter Nachweis)
     # expires_in Manipulation aktivieren BEVOR der erste HelloZeta Request
     # 2 Ausführungen: Initial Token Exchange + 1 Refresh
-    Wenn TGR setze lokale Variable "condition" auf "isResponse && request.path =~ '.*${paths.guard.tokenEndpointPath}'"
-    Dann Setze im TigerProxy für die Nachricht "${condition}" die Manipulation auf Feld "$.body.expires_in" und Wert "${accessTokenTtl}" und 1 Ausführungen
+    Wenn TGR setze lokale Variable "opaCondition" auf "isResponse && request.path =~ '.*${paths.opa.decisionPath}'"
+    Dann Setze im TigerProxy für die Nachricht "${opaCondition}" die Manipulation auf Feld "$.body.result.ttl.access_token" und Wert "${accessTokenTtl}" und 2 Ausführungen
 
     # Setup: Client zurücksetzen und Token holen
     Gegeben sei TGR sende eine leere GET Anfrage an "${paths.client.reset}"

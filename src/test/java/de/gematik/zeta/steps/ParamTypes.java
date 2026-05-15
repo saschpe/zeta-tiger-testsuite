@@ -76,19 +76,6 @@ public class ParamTypes {
     throw new IllegalArgumentException("Unknown Tiger metric: " + value);
   }
 
-
-  /**
-   * Defines a parameter type for JMeter summary metrics. Allowed values: errorRate, rps, avg_ms,
-   * pNN_ms, max_ms, min_ms.
-   *
-   * @param m metric column name in JMeter CSV
-   * @return the given string as metric name
-   */
-  @ParameterType("errorRate|rps|avg_ms|p\\d{1,3}_ms|max_ms|min_ms")
-  public String jmeterMetric(String m) {
-    return m;
-  }
-
   /**
    * Defines a parameter type for supported Kubernetes probe fields in pod specs.
    * Allowed values: {@code livenessProbe}, {@code readinessProbe}, {@code startupProbe}.

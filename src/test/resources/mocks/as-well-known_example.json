@@ -1,34 +1,29 @@
 {
-  "issuer": "http://zetaGuard",
-  "authorization_endpoint": "http://zetaGuard/oauth2/authorize",
-  "token_endpoint": "http://zetaGuard/oauth2/token",
-  "jwks_uri": "http://zetaGuard/oauth2/jwks",
-  "nonce_endpoint": "http://zetaGuard/nonce",
-  "openid_providers_endpoint": "http://zetaGuard/openid-providers",
+  "issuer": "https://auth-server.example.de",
+  "authorization_endpoint": "https://auth-server.example.de/auth",
+  "nonce_endpoint": "https://auth-server.example.de/nonce",
+  "registration_endpoint": "https://auth-server.example.de/register",
+  "token_endpoint": "https://auth-server.example.de/token",
+  "jwks_uri": "https://auth-server.example.de/jwks",
   "scopes_supported": [
-    "openid", "offline_access"
+    "openid",
+    "e-rezept",
+    "e-patientenakte"
   ],
   "response_types_supported": [
     "code"
   ],
-  "code_challenge_methods_supported": [
-    "S256"
+  "grant_types_supported": [
+    "authorization_code",
+    "urn:ietf:params:oauth:grant-type:token-exchange"
   ],
   "token_endpoint_auth_methods_supported": [
     "private_key_jwt"
   ],
   "token_endpoint_auth_signing_alg_values_supported": [
-    "PS256", "ES256"
-  ],
-  "dpop_signing_alg_values_supported": [
     "ES256"
   ],
-  "ui_locales_supported": [
-    "de-DE", "en-US"
-  ],
-  "grant_types_supported": [
-    "authorization_code",
-    "refresh_token",
-    "urn:ietf:params:oauth:grant-type:token-exchange"
+  "code_challenge_methods_supported": [
+    "S256"
   ]
 }

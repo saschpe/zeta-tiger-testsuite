@@ -49,12 +49,51 @@ def _write_file_lf(path: Path, content: str) -> None:
     handle.write(content)
 
 
-DEFAULT_XML = Path("docs/gemVZ_Afo_ZETA_Guard_V_1.2.1-0_V1.0.0_CC.xml")
+DEFAULT_XML = Path("docs/gemVZ_Afo_ZETA_Guard_V_1.3.0-0_V1.0.0.xml")
 DEFAULT_OUTPUT = Path("docs/asciidoc/afos")
 DEFAULT_TEST_PROCEDURE = (
     'Festlegungen zur funktionalen Eignung "Produkttest/Produktübergreifender Test"'
 )
 ROOT_README = Path("docs/asciidoc/afos/readme.adoc")
+REFERENCES_CHAPTER = Path("docs/asciidoc/chapters/02_referenzen.adoc")
+INTRODUCTION_CHAPTER = Path("docs/asciidoc/chapters/03_einleitung.adoc")
+ZETA_GUARD_COMPONENTS = Path(
+    "docs/asciidoc/definitions/zeta_guard_komponenten.adoc")
+
+
+@dataclass(frozen=True)
+class CatalogDocument:
+  """Metadata derived from the gemVZ XML snapshot filename."""
+
+  identifier: str
+  release: str
+  version: str
+
+  @property
+  def stem(self) -> str:
+    return f"{self.identifier}_V_{self.release}_V{self.version}"
+
+  @property
+  def reference_label(self) -> str:
+    return f"{self.identifier}_V_{self.release}"
+
+  @property
+  def url(self) -> str:
+    return (f"https://gemspec.gematik.de/docs/gemVZ/{self.identifier}/"
+            f"{self.stem}/")
+
+  @classmethod
+  def from_xml_path(cls, path: Path) -> "CatalogDocument":
+    match = re.fullmatch(r"(?P<identifier>.+)_V_(?P<release>.+)_V(?P<version>.+)",
+                         path.stem)
+    if not match:
+      raise ValueError(
+          f"Cannot derive gemVZ metadata from XML filename: {path.name}")
+    return cls(
+        identifier=match.group("identifier"),
+        release=match.group("release"),
+        version=match.group("version"),
+    )
 
 
 @dataclass(frozen=True)
@@ -66,6 +105,10 @@ class SourceDocument:
   version: str
 
   def as_adoc_list_entry(self) -> str:
+    return (f"* {self.as_adoc_link()}, "
+            f"Kurzbezeichnung: {self.identifier}, Version: {self.version}")
+
+  def as_adoc_link(self) -> str:
     base = "https://gemspec.gematik.de/docs/"
     if self.identifier.startswith("gemSpec"):
       base += "gemSpec/"
@@ -74,8 +117,7 @@ class SourceDocument:
     elif self.identifier.startswith("gemVZ"):
       base += "gemVZ/"
     base += f"{self.identifier}/{self.identifier}_V{self.version}"
-    return (f"* {base}[{self.denotation}], "
-            f"Kurzbezeichnung: {self.identifier}, Version: {self.version}")
+    return f"{base}[{self.denotation}]"
 
 
 @dataclass(frozen=True)
@@ -214,7 +256,6 @@ def _write_requirements(grouped: dict[str, list[Requirement]],
 def _render_gemspec_zeta_section(
     grouped: dict[str, list[Requirement]],
     sources: List[SourceDocument],
-    spec_url: str,
 ) -> str:
   lines: List[str] = []
   lines.append("=== Anforderungen gemVZ AFO ZETA Guard (Produkttest 3.1.1)\n")
@@ -231,14 +272,42 @@ def _render_gemspec_zeta_section(
   return "\n".join(lines).rstrip() + "\n"
 
 
-def _update_root_readme(root_readme: Path, section: str) -> None:
-  """Inject or replace the prodtest section inside afos/readme.adoc."""
+def _render_source_documents(sources: Iterable[SourceDocument]) -> List[str]:
+  """Render source-document list entries from XML metadata."""
+  return [source.as_adoc_list_entry() for source in sources]
+
+
+def _update_root_readme(root_readme: Path, section: str,
+                        catalog: CatalogDocument,
+                        sources: List[SourceDocument]) -> None:
+  """Inject or replace generated sections inside afos/readme.adoc."""
   heading = "=== Anforderungen gemVZ AFO ZETA Guard (Produkttest 3.1.1)"
+  source_intro = (
+      "Auf Basis der folgenden Versionen der Dokumente findet die Gestaltung "
+      "und Abdeckung der User-Stories statt.")
   lines: List[str] = []
   if root_readme.exists():
     lines = root_readme.read_text(encoding="utf-8").splitlines()
   else:
     lines = ["== Identifizierte Anforderungen", ""]
+
+  source_entries = _render_source_documents(sources)
+  source_intro_index = None
+  for idx, line in enumerate(lines):
+    if line == source_intro:
+      source_intro_index = idx
+      break
+  if source_intro_index is None:
+    insert_at = 2 if len(lines) > 1 else len(lines)
+    lines[insert_at:insert_at] = ["", source_intro, "", *source_entries, ""]
+  else:
+    bullet_start = source_intro_index + 1
+    while bullet_start < len(lines) and lines[bullet_start] == "":
+      bullet_start += 1
+    bullet_end = bullet_start
+    while bullet_end < len(lines) and lines[bullet_end].startswith("* "):
+      bullet_end += 1
+    lines[bullet_start:bullet_end] = source_entries
 
   start = None
   end = len(lines)
@@ -259,7 +328,75 @@ def _update_root_readme(root_readme: Path, section: str) -> None:
   else:
     updated = lines[:start] + [section.rstrip()] + lines[end:]
 
+  intro = (
+      f"Hierbei wurden die folgenden abzuprüfenden Anforderungen laut "
+      f"{catalog.url}[Verzeichnis von Anforderungen: Zero Trust Access (ZETA) "
+      f"Guard] identifiziert:")
+  intro_updated = False
+  for idx, line in enumerate(updated):
+    if line.startswith("Hierbei wurden die folgenden abzuprüfenden Anforderungen laut "):
+      updated[idx] = intro
+      intro_updated = True
+      break
+  if not intro_updated:
+    for idx, line in enumerate(updated):
+      if line.strip().startswith(heading):
+        updated[idx:idx] = [intro, ""]
+        break
+
   _write_file_lf(root_readme, "\n".join(updated) + "\n")
+
+
+def _replace_matching_line(path: Path, pattern: re.Pattern[str],
+                           replacement: str) -> None:
+  """Replace a matching line in an existing UTF-8 text file."""
+  if not path.exists():
+    return
+  lines = path.read_text(encoding="utf-8").splitlines()
+  changed = False
+  for idx, line in enumerate(lines):
+    if pattern.fullmatch(line):
+      lines[idx] = replacement
+      changed = True
+  if changed:
+    _write_file_lf(path, "\n".join(lines) + "\n")
+
+
+def _update_generated_references(catalog: CatalogDocument,
+                                 sources: List[SourceDocument]) -> None:
+  """Update repository AsciiDoc references that point at source documents."""
+  identifier = re.escape(catalog.identifier)
+  source_lookup = {source.identifier: source for source in sources}
+  gemspec_zeta = source_lookup.get("gemSpec_ZETA")
+  reference_lines = ["== Referenzen", ""]
+  for source in sources:
+    reference_lines.append(
+        f"* {source.as_adoc_link()}: Version {source.version}")
+  reference_lines.append(
+      f"* {catalog.url}[{catalog.reference_label}]: Version {catalog.version}")
+  _write_file_lf(REFERENCES_CHAPTER, "\n".join(reference_lines) + "\n")
+  if gemspec_zeta:
+    _replace_matching_line(
+        ZETA_GUARD_COMPONENTS,
+        re.compile(
+            r"Quelle: (?:\{gemSpec_ZETA\}\[gemSpec_ZETA\]|\S+\[.+\]), "
+            r"Abschnitt 3 .+"),
+        (f"Quelle: {gemspec_zeta.as_adoc_link()}, "
+         'Abschnitt 3 "Einordnung in die TI 2.0",'),
+    )
+  _replace_matching_line(
+      INTRODUCTION_CHAPTER,
+      re.compile(
+          r'.*\["Verzeichnis von Anforderungen Prüfvorschrift '
+          r'Zero Trust Access \(ZETA\) Guard"\]'),
+      (f'-  {catalog.url}["Verzeichnis von Anforderungen Prüfvorschrift '
+       f'Zero Trust Access (ZETA) Guard"]'),
+  )
+  _replace_matching_line(
+      INTRODUCTION_CHAPTER,
+      re.compile(rf".*\*{identifier}.*\*\."),
+      f"*{catalog.stem}*.",
+  )
 
 
 def _prepare_targets(grouped: dict[str, list[Requirement]],
@@ -289,11 +426,10 @@ def main(argv: Sequence[str] | None = None) -> int:
   _write_requirements(grouped, args.output_dir)
 
   if args.readme:
-    spec_url = (f"https://gemspec.gematik.de/docs/gemVZ/"
-                f"gemVZ_Afo_ZETA_Guard/"
-                f"{args.input_xml.stem}/")
-    section = _render_gemspec_zeta_section(grouped, sources, spec_url)
-    _update_root_readme(ROOT_README, section)
+    catalog = CatalogDocument.from_xml_path(args.input_xml)
+    section = _render_gemspec_zeta_section(grouped, sources)
+    _update_root_readme(ROOT_README, section, catalog, sources)
+    _update_generated_references(catalog, sources)
 
   print(
       f"Generated {len(requirements)} requirements in {args.output_dir.as_posix()}"

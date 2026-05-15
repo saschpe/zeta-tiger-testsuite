@@ -1,0 +1,12 @@
+[#TA_A_25644-01_06]
+===== TA_A_25644-01_06 - PDP Client-Registrierung mit Software Attestation / Windows
+
+Die Komponente Authorization Server MUSS die Clients bei der Registrierung über
+
+folgende Mechanismen attestieren:
+
+[ ... ]
+
+• Software Attestation für Windows [ ... ] Clients
+
+[ ... ]

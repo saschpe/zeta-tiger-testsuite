@@ -25,9 +25,13 @@ pep:
       nginxConfigRegex:    "pep_require_popp\\s+(on|off)\\s*;"
       nginxConfigEnabled:  "pep_require_popp      on;"
       nginxConfigDisabled: "pep_require_popp      off;"
+      validity:
+        nginxConfigRegex: "pep_popp_validity\\s+\"[^\"]+\"\\s*;"
+        nginxConfigAnchorRegex: "pep_popp_issuer\\s+[^;]+;"
+        nginxConfigTemplate: "pep_popp_validity \"%s\";"
   image:
     versionUpdate: "main"
-    versionDowngrade: "0.3.0"
+    versionDowngrade: "0.5.1"
     versionInvalid: "nonexistent-rollout-test-20260311"
   wellKnown:
     configMapName: "pep-well-known"
@@ -38,3 +42,6 @@ pep:
       resourceRegex: "\"zeta_asl_use\"\\s*:\\s*\"[^\"]+\""
       aslEnabledValue: "\"zeta_asl_use\":\"required\""
       aslDisabledValue: "\"zeta_asl_use\":\"not_supported\""
+
+authserver:
+  podName: "authserver"

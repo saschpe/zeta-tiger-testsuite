@@ -25,17 +25,16 @@
 #language:de
 
 @UseCase_01_04
-Funktionalität: client_registrierung_stationaer_sc_403
+Funktionalität: Client-Registrierung Stationär SC 403
 
-  @dev
-  @A_25653
   @A_25752
-  @A_26662
   @A_26661
-  @TA_A_25653_02
+  @A_26662
   @TA_A_25752_01
-  @TA_A_26662_01
   @TA_A_26661_04
+  @TA_A_26662_01
+  @dev
+  @MASVS-AUTH
   Szenariogrundriss: Client-Registrierung wird wegen Client Policy abgelehnt und begründet
     Gegeben sei TGR sende eine leere GET Anfrage an "${paths.client.reset}"
 
@@ -46,22 +45,17 @@ Funktionalität: client_registrierung_stationaer_sc_403
 
     Wenn TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
 
-    # OPA Decision prüfen - sollte allow=false liefern
-    Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.opa.decisionPath}"
-    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "200"
-    # TA_A_25653_02 - PDP Client-Registrierung - Umsetzung der Client Policy - Ablehnung durch Policy
-    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.body.result.allow" überein mit "false"
-
     # Registrierungs-/Token-Request muss mit 403 abgelehnt werden
     Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.guard.tokenEndpointPath}"
     Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "403"
     Und TGR speichere Wert des Knotens "$.body" der aktuellen Antwort in der Variable "body"
     # TA_A_26662_01 - ZETA Guard, HTTP Fehlerdetails
     Und validiere "${body}" gegen Schema "schemas/v_1_0/zeta-error.yaml"
-    # TA_A_25752_01 - PDP Client-Registrierung - Nutzer über Hintergrund zur Ablehnung der Clientregistrierung informieren - Client-Eigenschaften
-    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.body.error_description" überein mit ".*<ErwarteterHinweis>.*"
     Und TGR prüfe aktuelle Antwort enthält nicht Knoten "$.body.access_token"
     Und TGR prüfe aktuelle Antwort enthält nicht Knoten "$.body.refresh_token"
+    # TA_A_25752_01 - PDP Client-Registrierung - Nutzer über Hintergrund zur Ablehnung der Client-Registrierung informieren - Client-Eigenschaften
+    # Prüfung auf nicht spezifizierte Werte bis die Spezifikation klar beschreibt, was ein "benutzerfreundlicher Hinweis" ist
+    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.body.error_description" überein mit ".*<ErwarteterHinweis>.*"
 
     # Policy-Ablehnungsgründe:
     # - professionOID nicht unter den erlaubten Berufsgruppen

@@ -1,0 +1,4 @@
+[#TA_A_27016-01_07]
+===== TA_A_27016-01_07 - PoPP-Verifier - veraltete OCSP-Antwort wird nicht verwendet
+
+"Der PoPP-Verifier, der das Signaturzertifikat des PoPP-Token via TI-PKI prüft, MUSS dabei verifizieren, dass **eine OCSP-Antwort nach 24h als veraltet betrachtet und nicht mehr verwendet wird**."

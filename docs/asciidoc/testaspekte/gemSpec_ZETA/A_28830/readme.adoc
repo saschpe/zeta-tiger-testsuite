@@ -1,9 +1,0 @@
-==== Testaspekte für die Anforderung A_28830
-
-Folgende Testaspekte testen <<A_28830>>.
-
-include::TA_A_28830_01.adoc[]
-
-include::TA_A_28830_02.adoc[]
-
-include::TA_A_28830_03.adoc[]

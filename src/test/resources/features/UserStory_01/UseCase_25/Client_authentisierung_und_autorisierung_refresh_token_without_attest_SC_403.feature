@@ -28,15 +28,16 @@
 Funktionalität: Client_authentisierung_und_autorisierung_refresh_token_without_attest_SC_403
 
 
-  @dev
   @A_25660
   @TA_A_25660_06
+  @dev
+  @MASVS-AUTH
   Szenario: Refresh Token wird bei negativer Policy Decision abgelehnt (Negativtest)
     Gegeben sei TGR setze lokale Variable "accessTokenTtl" auf "5"
     # WICHTIG: expires_in Manipulation MUSS VOR dem ersten Token-Request aktiviert werden!
     # Sonst hat der erste Token normales expires_in (z.B. 300s) und wird nicht refresht
-    Und TGR setze lokale Variable "tokenResponseCondition" auf "isResponse && request.path =~ '.*${paths.guard.tokenEndpointPath}'"
-    Und Setze im TigerProxy für die Nachricht "${tokenResponseCondition}" die Manipulation auf Feld "$.body.expires_in" und Wert "${accessTokenTtl}" und 1 Ausführungen
+    Wenn TGR setze lokale Variable "opaCondition" auf "isResponse && request.path =~ '.*${paths.opa.decisionPath}'"
+    Dann Setze im TigerProxy für die Nachricht "${opaCondition}" die Manipulation auf Feld "$.body.result.ttl.access_token" und Wert "${accessTokenTtl}" und 1 Ausführungen
 
     # Initiale Token holen (mit manipuliertem expires_in)
     Und TGR sende eine leere GET Anfrage an "${paths.client.reset}"

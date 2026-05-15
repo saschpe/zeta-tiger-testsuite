@@ -1,6 +1,8 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+ARG CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX=docker.io
+
 # ---------- Build stage: package runnable testsuite artifacts ----------
-FROM maven:3.9.12-eclipse-temurin-21-alpine AS build
+FROM ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/library/maven:3.9.12-eclipse-temurin-21-alpine@sha256:8b2f036477a5bc9fbeb16cfb7301c484d7fff727b1c4907301ac665526bd7a8e AS build
 
 WORKDIR /app
 ARG SERENITY_CLI_VERSION=4.1.13
@@ -18,7 +20,7 @@ RUN --mount=type=secret,id=ci_job_token,required=false \
     . docker/build-common.sh && \
     tiger_export_ci_job_token && \
     mvn -s .m2/settings.xml -B -DskipTests=true -DskipITs=true \
-      -Dlicense.skip=true -Dcheckstyle.skip=true \
+      -Dlicense.skip=true -Dlicense.skipAddThirdParty=true -Dcheckstyle.skip=true \
       -Dmaven.repo.local=/tmp/.m2/repository \
       -Dtraceability.skip=true -Dtraceability.sync.skip=true -Dserenity.readme.sync.skip=true \
       package \
@@ -30,7 +32,7 @@ RUN . docker/build-common.sh && \
     tiger_verify_gitlab_testproxy_artifacts
 
 # ---------- Runtime stage: run testsuite without Maven ----------
-FROM eclipse-temurin:21-jre-alpine AS runtime
+FROM ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/library/eclipse-temurin:21-jre-alpine@sha256:704db3c40204a44f471191446ddd9cda5d60dab40f0e15c6507b815ed897238b AS runtime
 ARG SERENITY_CLI_VERSION=4.1.13
 ARG ZETA_UID=1000
 ARG ZETA_GID=1000
@@ -41,13 +43,14 @@ WORKDIR /app
 RUN mkdir -p /app/tools
 COPY --from=build /app/target/*-tests.jar /app/tests.jar
 COPY --from=build /app/target/deps /app/libs
+COPY --from=build /app/.cache/zeta-test-certificates /app/zeta-test-certificates
 COPY --from=build /app/target/agent/tiger-java-agent.jar /app/agent/tiger-java-agent.jar
 COPY --from=build /app/tiger.yaml /app/tiger.yaml
 COPY --from=build /app/tiger-proxy.yaml /app/tiger-proxy.yaml
 COPY --from=build /app/tiger /app/tiger
 COPY --from=build /app/docs/asciidoc/tables/source/product_implementation.csv /app/docs/asciidoc/tables/source/product_implementation.csv
 COPY --from=build /app/docs/asciidoc/testaspekte /app/docs/asciidoc/testaspekte
-COPY --from=build /app/tools/tls-test-tool-1.0.1/TlsTestTool-alpine /app/tools/tls-test-tool-1.0.1/TlsTestTool-alpine
+COPY --from=build /app/src/test/resources/tls-test-tool/certificates /app/src/test/resources/tls-test-tool/certificates
 COPY --from=build /app/src/test/resources/mocks /app/src/test/resources/mocks
 COPY --from=build /app/src/test/resources/keys /app/src/test/resources/keys
 COPY --from=build /app/src/test/resources/schemas /app/src/test/resources/schemas
@@ -55,6 +58,9 @@ COPY --from=build /app/serenity-cli/serenity-cli-${SERENITY_CLI_VERSION}.jar /ap
 COPY --from=build /app/docker/run-tests-common.sh /app/run-tests-common.sh
 COPY docker/quality_gate/run-tests.sh /app/run-tests.sh
 RUN chmod +x /app/run-tests.sh
+
+# The TLS test tool fixture binary depends on Alpine's C/C++ runtime libraries.
+RUN apk add --no-cache libgcc libstdc++
 
 # Install kubectl only when the base image does not already provide it.
 RUN . /app/run-tests-common.sh && \
@@ -68,9 +74,9 @@ ENV ZETA_BASE_URL="" \
     ZETA_PROXY_URL="" \
     ALLOW_DEPLOYMENT_MODIFICATION="" \
     OPENSEARCH_URL="" \
-    ZETA_TEST_CERTIFICATES_DIR="" \
+    ZETA_TEST_CERTIFICATES_DIR="/app/zeta-test-certificates" \
     PROFILE="" \
-    CUCUMBER_TAGS="@smoke" \
+    CUCUMBER_TAGS="" \
     SERENITY_EXPORT_DIR="" \
     CUCUMBER_EXPORT_DIR="" \
     ALLURE_RESULTS_DIR="" \

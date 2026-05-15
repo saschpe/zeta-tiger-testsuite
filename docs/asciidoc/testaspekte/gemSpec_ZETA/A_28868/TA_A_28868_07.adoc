@@ -1,0 +1,8 @@
+[#TA_A_28868_07]
+===== TA_A_28868_07 - TLS-Verbindung zwischen Zeta-Client und Zeta-Guard - ZETA Client ECC-Kurven
+
+"Bei dem ephemeren Elliptic-Curve-Diffie-Hellman-Schlüsselaustausch und bei der Signaturprüfung mittels ECDSA MÜSSEN die Kurven `P-256` oder `P-384` [FIPS-186-5] unterstützt werden. Daneben KÖNNEN die Kurven `brainpoolP256r1`, `brainpoolP384r1` oder `brainpoolP512r1` (vgl. [RFC-5639] und [RFC-7027]) unterstützt werden. Andere Kurven SOLLEN NICHT verwendet werden. **[<=]**"
+
+Hinweis zu TLS 1.3:
+
+Für TLS 1.3 ist es ausreichend, die Konformität der unterstützten Kurven anhand des ClientHello zu prüfen. Dabei sind insbesondere die Extensions „supported_groups“ und „key_share“ auszuwerten.

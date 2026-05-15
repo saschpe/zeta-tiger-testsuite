@@ -36,9 +36,9 @@ Die jeweils zum Nachweis der Anwesenheit des Patienten notwendigen PoPP Token li
 * das jeweilige PoPP Token validiert wird und
 * die Dauer der Gültigkeit seit Ausstellung, nach Ausstellungs- und Prüfzeitpunkt
 eingestellt sind.
-- Beide PoPP Token sind ungültig:
-* PoPP Token 1 verfügt über eine ungültige Signatur
-* PoPP Token 2 verfügt über einen ungültigen Wert bzgl. Gültigkeit, Ausstellungs- oder Prüfzeitpunkt.
+- Die eingesetzten PoPP Token sind ungültig:
+* ein PoPP Token verfügt über eine ungültige Signatur
+* weitere PoPP Token verletzen entweder die claim-Prüfung oder einen Zeitparameter bzgl. Gültigkeit, Ausstellungs- oder Prüfzeitpunkt.
 
 | Ablauf: |
 Der Ablauf für beide PoPP Token ist gleich, nur mit jeweils unterschiedlichen PoPP Token und Endpunkten:
@@ -61,10 +61,15 @@ Der Abruf der geschützten Ressource vom MA über den ZETA Client war nicht erfo
 
 | Abgedeckte Testaspekte: |
 * <<TA_A_25660_03>>
+* <<TA_A_26477_02>>
+* <<TA_A_26477_03>>
+* <<TA_A_26477_08>>
+* <<TA_A_26450_01>>
 * <<TA_A_26477_09>>
 * <<TA_A_26477_10>>
+* <<TA_A_26477_13>>
+* <<TA_A_26493-01_01>>
 * <<TA_A_26661_20>>
-* <<TA_A_27007_20>>
 
 |===
 

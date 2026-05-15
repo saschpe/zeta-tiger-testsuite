@@ -24,15 +24,15 @@
 
 #language:de
 
-@websocket
-@stomp
-@no_proxy
 @UseCase_Smoke_03
+@no_proxy
+@stomp
+@websocket
 Funktionalität: WebSocket/STOMP - E-Rezept CRUD Lifecycle Test
 
   Grundlage:
     Und setze Anfrage Timeout für WebSocket Verbindungen auf 5 Sekunden
-    Und setze Timeout für WebSocket Nachrichten auf 5 Sekunden
+    Und setze Timeout für WebSocket Nachrichten auf 10 Sekunden
 
   Szenariogrundriss: CRUD - Rezept anlegen lesen auflisten aktualisieren löschen
     Gegeben sei TGR setze lokale Feature Variable "uniquePrescriptionId" auf "RX-WS-SMOKE-<lauf>-${free.port.50}"

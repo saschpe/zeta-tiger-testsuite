@@ -3,15 +3,29 @@
 # Override via environment variable ZETA_BASE_URL or Maven property -Dzeta_base_url=....
 zeta_base_url: zeta-kind.local
 
+# Hostname (without scheme) for the external Keycloak endpoint.
+# Override via environment variable KEYCLOAK_URL or Maven property -Dkeycloak_url=....
+keycloak_url: authserver
+
 zeta_proxy_url: localhost:9999
 
 zeta_k8s_namespace: zeta-local
 
 allow_deployment_modification: false
 
+allow_performance_tests: false
+
 zeta_k8s_command_timeout: 60
 
 zeta_k8s_pod_ready_timeout: 120
+
+schemaValidation:
+  # If false, schema validation treats object schemas as strict by default and
+  # rejects additional properties unless the schema explicitly allows them.
+  allowAdditionalProperties: true
+  # If set to true, the scenarios will continue with the next test steps
+  # instead of stopping on validation errors.
+  soft: true
 
 # OpenSearch host (without scheme) for telemetry lookups.
 # Override via environment variable OPENSEARCH_URL or Maven property -Dopensearch_url=....
@@ -26,3 +40,7 @@ testCertificates.dir: ../zeta-test-certificates
 # Override via environment variable ZETA_TLS_TEST_TOOL_SERVICE_URL or Maven property
 # -Dzeta_tls_test_tool_service_url=....
 zeta_tls_test_tool_service_url: ${zeta_base_url}:9012
+
+# PoPP token generator URL for performance tests.
+# Override via -Dpopp_token_generator_url=... or environment variable POPP_TOKEN_GENERATOR_URL.
+popp_token_generator_url: https://${zeta_base_url}/popp-token-generator/popp/test/api/v1/token-generator

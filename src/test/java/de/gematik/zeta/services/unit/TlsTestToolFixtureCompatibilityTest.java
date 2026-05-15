@@ -48,8 +48,13 @@ import org.junit.jupiter.api.Test;
 class TlsTestToolFixtureCompatibilityTest {
 
   private static final Path CERTIFICATE_DIRECTORY =
-      Path.of("tools", "tls-test-tool-1.0.1", "certificates");
+      Path.of("src", "test", "resources", "tls-test-tool", "certificates");
 
+  /**
+   * Verifies that every mapped certificate fixture has a matching private key fixture.
+   *
+   * @throws Exception if a fixture cannot be read or parsed
+   */
   @Test
   void mappedServerCertificatesMatchTheirPrivateKeys() throws Exception {
     for (var certificate : TlsServerCertificates.values()) {
@@ -68,6 +73,14 @@ class TlsTestToolFixtureCompatibilityTest {
     }
   }
 
+  /**
+   * Reads the public key from the configured certificate fixture.
+   *
+   * @param certificate certificate fixture descriptor
+   * @return public key from the X.509 certificate
+   * @throws IOException if the certificate file cannot be read
+   * @throws GeneralSecurityException if the certificate cannot be parsed
+   */
   private PublicKey readCertificatePublicKey(TlsServerCertificates certificate)
       throws IOException, GeneralSecurityException {
     try (var inputStream = Files.newInputStream(CERTIFICATE_DIRECTORY.resolve(certificate.getRelativePath()))) {
@@ -76,6 +89,13 @@ class TlsTestToolFixtureCompatibilityTest {
     }
   }
 
+  /**
+   * Reads the public key from the configured private key fixture.
+   *
+   * @param privateKey private key fixture descriptor
+   * @return public key derived from the private key fixture
+   * @throws IOException if the private key file cannot be read
+   */
   private PublicKey readPrivateKeyPublicKey(TlsServerCertificates privateKey)
       throws IOException {
     try (var pemParser =

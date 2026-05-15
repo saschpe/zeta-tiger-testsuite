@@ -1,0 +1,80 @@
+[#UC_01_27]
+== UseCase_01_27: Client authentisierung und autorisierung refresh token without attest SC 400
+
+.UseCase_01_27
+[cols="1,1a",options="autowidth"]
+|===
+| *Titel:* | Client authentisierung und autorisierung refresh token without attest SC 400
+
+| Akteur: |
+*MA einer LEI*
+
+| weitere Akteure: |
+- *ZETA Client*
+- *PDP Authorization Server*
+
+| Auslöser: |
+Ein MA einer LEI möchte auf einen Resource Server zugreifen.
+
+| Kurzbeschreibung: |
+Der ZETA Client versucht, ein bereits verwendetes Refresh Token erneut am Token-Endpunkt einzusetzen.
+
+Der PDP Authorization Server erkennt die Wiederverwendung des durch Refresh Token Rotation invalidierten Refresh Tokens und lehnt den Token Request mit ``400 Bad Request`` ab.
+Gemäß RFC6749 wird der Fehler als ``invalid_grant`` zurückgegeben.
+
+| Vorbedingung: |
+Der ZETA Client verfügt über ein Refresh Token, das bereits erfolgreich für eine Token-Erneuerung verwendet wurde und dadurch invalidiert ist.
+
+| Nebenbedingung: |
+Der Request erfolgt am Token-Endpunkt mit ``grant_type=refresh_token``.
+Das Refresh Token wurde bereits verwendet und darf aufgrund der Refresh Token Rotation nicht erneut gegen ein Access Token und ein Refresh Token getauscht werden.
+
+| Ablauf: |
+1. MA startet einen Zugriff auf den Resource Server über den ZETA Client.
+2. Der ZETA Client verfügt zunächst über ein gültiges Refresh Token.
+3. Der ZETA Client verwendet dieses Refresh Token erfolgreich für eine Token-Erneuerung.
+4. Der PDP Authorization Server stellt ein neues Access Token und ein neues Refresh Token aus.
+5. Der PDP Authorization Server invalidiert das zuvor verwendete Refresh Token.
+6. Der ZETA Client bzw. der Test sendet erneut einen Token Request mit dem bereits verwendeten Refresh Token.
+7. Der PDP Authorization Server erkennt die Wiederverwendung des invalidierten Refresh Tokens.
+8. Der PDP Authorization Server lehnt den Token Request mit ``400 Bad Request`` und dem OAuth2-Fehler ``invalid_grant`` ab.
+9. Der PDP Authorization Server stellt keine neuen Tokens aus.
+
+| Nachbedingung: |
+Der ZETA Client erhält kein neues Access Token und kein neues Refresh Token.
+Das wiederverwendete Refresh Token bleibt ungültig.
+
+| Abgedeckte Testaspekte: |
+* <<TA_A_25662_02>>
+* <<TA_A_25782_05>>
+* <<TA_A_26662_01>>
+
+|===
+
+[#usecase_01_27_sequence]
+[mermaid,usecase-01-27-sequence,svg]
+....
+sequenceDiagram
+    autonumber
+
+    actor MA as MA einer LEI
+    participant ZC as ZETA Client
+    participant PDP-AS as PDP Authorization<br>Server
+
+    MA->>+ZC: Starte Zugriff auf Resource Server
+    ZC->>+PDP-AS: POST /token grant_type=refresh_token
+    PDP-AS->>-ZC: 200 OK (neues Access/Refresh Token)
+    ZC->>+PDP-AS: POST /token mit bereits verwendetem Refresh Token
+    PDP-AS->>-ZC: 400 Bad Request (invalid_grant)
+    ZC->>-MA: "Zugriff nicht gestattet"
+....
+
+ifdef::render_features[]
+[.lead]
+Feature-Datei zu diesem Use Case:
+
+[source]
+----
+include::client_authentisierung_und_autorisierung_refresh_token_without_attest_sc_400.feature[]
+----
+endif::[]

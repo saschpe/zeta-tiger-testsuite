@@ -24,12 +24,11 @@
 
 #language:de
 
-@no_proxy
 @UseCase_Smoke_02
-@dev
+@critical
+@no_proxy
 Funktionalität: REST API - E-Rezept CRUD Lebenszyklus Test
 
-  @staging
   Szenariogrundriss: CRUD - Rezept anlegen lesen aktualisieren löschen
     # Setup
     Und TGR setze lokale Feature Variable "uniquePrescriptionId" auf "RX-SMOKE-<lauf>-${free.port.50}"
@@ -199,7 +198,6 @@ Funktionalität: REST API - E-Rezept CRUD Lebenszyklus Test
     Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "409"
     Und TGR speichere Wert des Knotens "$.body" der aktuellen Antwort in der Variable "body"
 
-  @staging
   Szenario: CREATE - Fehlende Pflichtfelder geben 400 BAD REQUEST zurück
     Und TGR setze lokale Feature Variable "uniquePrescriptionId" auf "RX-ERROR-${free.port.50}"
     # Fehlendes Pflichtfeld: medicationName
@@ -216,7 +214,6 @@ Funktionalität: REST API - E-Rezept CRUD Lebenszyklus Test
     Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "400"
     Und TGR speichere Wert des Knotens "$.body" der aktuellen Antwort in der Variable "body"
 
-  @staging
   Szenario: CREATE - Fehlerhaftes JSON gibt 400 BAD REQUEST zurück
     Und TGR setze lokale Feature Variable "uniquePrescriptionId" auf "RX-ERROR-${free.port.50}"
     # Fehlerhaftes JSON senden
@@ -343,7 +340,6 @@ Funktionalität: REST API - E-Rezept CRUD Lebenszyklus Test
     Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "404"
     Und TGR speichere Wert des Knotens "$.body" der aktuellen Antwort in der Variable "body"
 
-  @staging
   Szenario: CREATE - Ungültiges Datumsformat gibt 400 BAD REQUEST zurück
     Und TGR setze lokale Feature Variable "uniquePrescriptionId" auf "RX-ERROR-${free.port.50}"
     Wenn TGR sende eine POST Anfrage an "${paths.client.baseUrl}${paths.erezept.rest.proxyPath}" mit ContentType "application/json" und folgenden mehrzeiligen Daten:

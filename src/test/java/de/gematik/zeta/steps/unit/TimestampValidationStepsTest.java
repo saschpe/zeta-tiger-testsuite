@@ -27,6 +27,7 @@ package de.gematik.zeta.steps.unit;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import de.gematik.test.tiger.common.config.TigerGlobalConfiguration;
 import de.gematik.zeta.steps.TimestampValidationSteps;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -90,4 +91,72 @@ class TimestampValidationStepsTest {
         "Past timestamp was not recognized as not yet expired");
   }
 
+  /**
+   * Verifies that recent timestamps pass the maximum age validation.
+   */
+  @Test
+  void validateTimestampMaximumAgeAcceptsRecentTimestamp() {
+    Instant recent = Instant.now().minus(30, ChronoUnit.SECONDS);
+
+    assertDoesNotThrow(
+        () -> validator.validateTimestampMaximumAge(String.valueOf(recent.getEpochSecond()), "60"),
+        "Recent timestamp should be accepted");
+  }
+
+  /**
+   * Verifies that timestamps older than the configured age are rejected.
+   */
+  @Test
+  void validateTimestampMaximumAgeRejectsOldTimestamp() {
+    Instant old = Instant.now().minus(120, ChronoUnit.SECONDS);
+
+    assertThrows(AssertionError.class,
+        () -> validator.validateTimestampMaximumAge(String.valueOf(old.getEpochSecond()), "60"),
+        "Old timestamp should be rejected");
+  }
+
+  /**
+   * Verifies that timestamps from the current quarter are accepted.
+   */
+  @Test
+  void validateTimestampIsInCurrentQuarterAcceptsCurrentQuarter() {
+    Instant now = Instant.now();
+
+    assertDoesNotThrow(
+        () -> validator.validateTimestampIsInCurrentQuarter(String.valueOf(now.getEpochSecond())),
+        "Current timestamp should be accepted as current quarter");
+  }
+
+  /**
+   * Verifies that two timestamps in the same quarter are accepted.
+   */
+  @Test
+  void validateTimestampsAreInSameQuarterAcceptsSameQuarter() {
+    Instant first = Instant.parse("2026-04-24T10:00:00Z");
+    Instant second = Instant.parse("2026-06-30T10:00:00Z");
+
+    assertDoesNotThrow(
+        () -> validator.validateTimestampsAreInSameQuarter(
+            String.valueOf(first.getEpochSecond()),
+            String.valueOf(second.getEpochSecond())),
+        "Timestamps in the same quarter should be accepted");
+  }
+
+  /**
+   * Verifies that the previous-quarter helper stores a timestamp outside the current quarter.
+   */
+  @Test
+  void storeTimestampFromPreviousQuarterStoresDifferentQuarter() {
+    String varName = "timestampValidationStepsTestPreviousQuarter";
+
+    validator.storeTimestampFromPreviousQuarter(varName);
+
+    String storedTimestamp = TigerGlobalConfiguration.readStringOptional(varName).orElseThrow();
+    assertThrows(AssertionError.class,
+        () -> validator.validateTimestampIsInCurrentQuarter(storedTimestamp),
+        "Previous-quarter timestamp should not be accepted as current quarter");
+    assertDoesNotThrow(
+        () -> validator.validateTimestampIsExpired(storedTimestamp),
+        "Previous-quarter timestamp should be in the past");
+  }
 }

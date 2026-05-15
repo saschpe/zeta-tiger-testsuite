@@ -23,9 +23,7 @@ if [ -z "${PROFILE}" ]; then
 fi
 
 common_property_args="$(tiger_common_property_args)"
-
-set +e
-mvn -o -B \
+set -- \
   -Dmaven.repo.local=/tmp/.m2/repository \
   -Djava.awt.headless=true \
   -Dlicense.skip=true \
@@ -35,10 +33,19 @@ mvn -o -B \
   -Dtiger.lib.trafficVisualization=false \
   -Dtiger.lib.rbelAnsiColors=false \
   -Dtiger.lib.runTestsOnStart=true \
-  -Dfailsafe.testFailureIgnore=false \
-  ${common_property_args} \
-  "-Dcucumber.filter.tags=${CUCUMBER_TAGS}" \
-  verify
+  -Dfailsafe.testFailureIgnore=false
+
+if [ -n "${common_property_args}" ]; then
+  # shellcheck disable=SC2086 # Shared helper intentionally returns a list of -D args.
+  set -- "$@" ${common_property_args}
+fi
+
+if [ -n "${CUCUMBER_TAGS:-}" ]; then
+  set -- "$@" "-Dcucumber.filter.tags=${CUCUMBER_TAGS}"
+fi
+
+set +e
+mvn -o -B "$@" verify
 MVN_RESULT=$?
 set -e
 

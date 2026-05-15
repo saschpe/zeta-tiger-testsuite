@@ -87,13 +87,15 @@ class TestDriverConfigurationServiceTest {
         baseUrl() + "/testdriver-api/configure");
 
     service.reset();
-    service.configure("https://tls-test-tool.example.local:8443", "-----BEGIN CERTIFICATE-----\nMIID...\n-----END CERTIFICATE-----");
+    service.configure("https://tls-test-tool.example.local:8443", "-----BEGIN CERTIFICATE-----\nMIID...\n-----END CERTIFICATE-----",
+        false);
 
     assertEquals("GET", resetMethod.get());
     assertEquals("POST", configureMethod.get());
     assertEquals("application/json", configureContentType.get());
     assertTrue(configureBody.get().contains("\"resource\":\"https://tls-test-tool.example.local:8443\""));
     assertTrue(configureBody.get().contains("\"caCertificatePem\":\"-----BEGIN CERTIFICATE-----\\nMIID...\\n-----END CERTIFICATE-----\""));
+    assertTrue(configureBody.get().contains("\"disableTlsVerification\":false"));
   }
 
   /**
@@ -118,7 +120,8 @@ class TestDriverConfigurationServiceTest {
         baseUrl() + "/testdriver-api/configure");
 
     var exception = assertThrows(AssertionError.class,
-        () -> service.configure("https://tls-test-tool.example.local:8443", "CERT"));
+        () -> service.configure("https://tls-test-tool.example.local:8443", "CERT",
+            false));
 
     assertTrue(exception.getMessage().contains("POST"));
     assertTrue(exception.getMessage().contains("/testdriver-api/configure"));

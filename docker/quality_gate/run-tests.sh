@@ -31,16 +31,31 @@ tests_jar="$(find /app -maxdepth 1 -name '*-tests.jar' | head -n1 || true)"
 classpath="${tests_jar}:/app/libs/*"
 
 common_property_args="$(tiger_common_property_args)"
+run_quality_gate() {
+  if [ -n "${CUCUMBER_TAGS:-}" ]; then
+    # shellcheck disable=SC2086 # Shared helper intentionally returns a list of -D args.
+    java -Dserenity.outputDirectory="${serenity_dir}" \
+      "-Dzeta.cucumber.outputDirectory=${cucumber_dir}" \
+      -Djava.net.preferIPv4Stack=true \
+      ${common_property_args} \
+      "-Dcucumber.filter.tags=${CUCUMBER_TAGS}" \
+      -javaagent:"${agent}" \
+      -cp "${classpath}" \
+      de.gematik.zeta.TigerTestsuiteMain "$@"
+  else
+    # shellcheck disable=SC2086 # Shared helper intentionally returns a list of -D args.
+    java -Dserenity.outputDirectory="${serenity_dir}" \
+      "-Dzeta.cucumber.outputDirectory=${cucumber_dir}" \
+      -Djava.net.preferIPv4Stack=true \
+      ${common_property_args} \
+      -javaagent:"${agent}" \
+      -cp "${classpath}" \
+      de.gematik.zeta.TigerTestsuiteMain "$@"
+  fi
+}
 
 set +e
-java -Dserenity.outputDirectory="${serenity_dir}" \
-  "-Dzeta.cucumber.outputDirectory=${cucumber_dir}" \
-  -Djava.net.preferIPv4Stack=true \
-  ${common_property_args} \
-  "-Dcucumber.filter.tags=${CUCUMBER_TAGS}" \
-  -javaagent:"${agent}" \
-  -cp "${classpath}" \
-  de.gematik.zeta.TigerTestsuiteMain "$@"
+run_quality_gate "$@"
 rc=$?
 set -e
 

@@ -50,6 +50,7 @@ class TlsTestToolServiceTest {
 
   private HttpServer server;
   private Path configFile;
+  private Path caCertificateFile;
   private Path certificateFile;
   private Path privateKeyFile;
 
@@ -62,6 +63,7 @@ class TlsTestToolServiceTest {
       server.stop(0);
     }
     deleteIfExists(configFile);
+    deleteIfExists(caCertificateFile);
     deleteIfExists(certificateFile);
     deleteIfExists(privateKeyFile);
   }
@@ -72,7 +74,7 @@ class TlsTestToolServiceTest {
     server.createContext("/config", exchange -> writeJson(exchange, 200, "{\"config\":\"server.port=8443\"}"));
     server.createContext("/state", exchange -> writeJson(exchange, 200,
         "{\"running\":true,\"lastExitCode\":0,\"startedAt\":\"2026-03-13T10:15:30Z\",\"stoppedAt\":null}"));
-    server.createContext("/start", exchange -> writeJson(exchange, 200,
+    server.createContext("/startAsTlsServer", exchange -> writeJson(exchange, 200,
         "{\"running\":true,\"lastExitCode\":null,\"startedAt\":\"2026-03-13T10:16:00Z\",\"stoppedAt\":null}"));
     server.createContext("/stop", exchange -> writeJson(exchange, 200,
         "{\"running\":false,\"lastExitCode\":0,\"startedAt\":\"2026-03-13T10:16:00Z\",\"stoppedAt\":\"2026-03-13T10:16:08Z\"}"));
@@ -87,7 +89,7 @@ class TlsTestToolServiceTest {
     assertEquals(Integer.valueOf(0), state.lastExitCode());
     assertEquals(Instant.parse("2026-03-13T10:15:30Z"), state.startedAt());
     assertNull(state.stoppedAt());
-    var started = service.start();
+    var started = service.startAsTlsServer();
     assertTrue(started.running());
     var stopped = service.stop();
     assertFalse(stopped.running());
@@ -118,18 +120,30 @@ class TlsTestToolServiceTest {
       exchange.sendResponseHeaders(200, -1);
       exchange.close();
     });
+
+    var caCertificateContentType = new AtomicReference<String>();
+    var caCertificateBody = new AtomicReference<String>();
+    server.createContext("/caCertificate", exchange -> {
+      caCertificateContentType.set(exchange.getRequestHeaders().getFirst("Content-Type"));
+      caCertificateBody.set(readBody(exchange.getRequestBody()));
+      exchange.sendResponseHeaders(200, -1);
+      exchange.close();
+    });
     server.start();
 
     configFile = Files.createTempFile("tls-tool-config", ".conf");
+    caCertificateFile = Files.createTempFile("tls-tool-ca-certificate", ".pem");
     certificateFile = Files.createTempFile("tls-tool-certificate", ".pem");
     privateKeyFile = Files.createTempFile("tls-tool-key", ".pem");
     Files.writeString(configFile, "listenPort=8443\n", StandardCharsets.UTF_8);
+    Files.writeString(caCertificateFile, "CA_CERT_PEM", StandardCharsets.UTF_8);
     Files.writeString(certificateFile, "CERT_PEM", StandardCharsets.UTF_8);
     Files.writeString(privateKeyFile, "-----BEGIN PRIVATE KEY-----\nKEY_PEM\n-----END PRIVATE KEY-----\n", StandardCharsets.UTF_8);
 
     var service = new TlsTestToolService(baseUrl());
     service.updateConfig(configFile);
     service.updateCertificate(certificateFile, privateKeyFile);
+    service.updateCaCertificate(caCertificateFile);
 
     assertEquals("PUT", requestMethod.get());
     assertTrue(configContentType.get().startsWith("multipart/form-data"));
@@ -139,6 +153,8 @@ class TlsTestToolServiceTest {
     assertEquals("application/json", certificateContentType.get());
     assertTrue(certificateBody.get().contains("\"certificatePem\":\"CERT_PEM\""));
     assertTrue(certificateBody.get().contains("\"privateKeyPem\":\"-----BEGIN PRIVATE KEY-----\\nKEY_PEM\\n-----END PRIVATE KEY-----\\n\""));
+    assertEquals("application/json", caCertificateContentType.get());
+    assertTrue(caCertificateBody.get().contains("\"caCertificatePem\":\"CA_CERT_PEM\""));
   }
 
   /**
@@ -203,16 +219,36 @@ class TlsTestToolServiceTest {
   @Test
   void wrapsHttpErrorResponsesAsAssertionErrors() throws Exception {
     server = HttpServer.create(new InetSocketAddress(0), 0);
-    server.createContext("/start", exchange -> writeText(exchange, 409, "already running"));
+    server.createContext("/startAsTlsServer", exchange -> writeText(exchange, 409, "already running"));
     server.start();
 
     var service = new TlsTestToolService(baseUrl());
 
-    var exception = assertThrows(AssertionError.class, service::start);
+    var exception = assertThrows(AssertionError.class, service::startAsTlsServer);
 
     assertTrue(exception.getMessage().contains("POST"));
-    assertTrue(exception.getMessage().contains("/start"));
+    assertTrue(exception.getMessage().contains("/startAsTlsServer"));
     assertTrue(exception.getMessage().contains("409"));
+  }
+
+  @Test
+  void startsTlsToolInClientModeViaDedicatedEndpoint() throws Exception {
+    var requestMethod = new AtomicReference<String>();
+
+    server = HttpServer.create(new InetSocketAddress(0), 0);
+    server.createContext("/startAsTlsClient", exchange -> {
+      requestMethod.set(exchange.getRequestMethod());
+      writeJson(exchange, 200,
+          "{\"running\":true,\"lastExitCode\":null,\"startedAt\":\"2026-03-13T10:16:00Z\",\"stoppedAt\":null}");
+    });
+    server.start();
+
+    var service = new TlsTestToolService(baseUrl());
+
+    var started = service.startAsTlsClient();
+
+    assertEquals("POST", requestMethod.get());
+    assertTrue(started.running());
   }
 
   @Test

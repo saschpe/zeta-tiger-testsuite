@@ -25,8 +25,11 @@ Um auf einen Resource Server zugreifen zu können, benötigt der
 Client ein Access Token vom PDP Authorization Server.
 Stationäre ZETA Clients verwenden dafür den Token Exchange Flow mittels Software-Attestierung. +
 
-Obwohl die technischen Nachweise korrekt übermittelt werden, verweigert die Policy Engine den Zugriff. 
-Der PDP Authorization Server gibt deshalb ``403 Forbidden`` zurück und stellt keine Tokens aus.
+Der Token-Austausch mittels Software-Attestierung wird vom PDP Authorization Server mit ``403 Forbidden`` abgelehnt,
+wenn der Request grundsätzlich verarbeitet werden kann, der Client jedoch keine Berechtigung für die angeforderte Ressource erhält.
+Dies kann z.B. durch eine ablehnende Entscheidung der Policy Engine (``allow = false``) oder durch eine fachliche Ablehnung der
+übermittelten Attestierungs- bzw. Autorisierungsdaten erfolgen.
+In diesem Fall stellt der PDP Authorization Server keine Tokens aus.
 
 | Vorbedingung: |
 Der stationäre ZETA Client ist bereits beim ZETA Guard registriert, d.h. es existiert bereits eine
@@ -151,9 +154,12 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
 Es wurden keine Access- oder Refresh-Token ausgegeben. Der Zugriff auf den Resource Server bleibt verwehrt.
 
 | Abgedeckte Testaspekte: |
+* <<TA_A_25644-01_05>>
 * <<TA_A_25661_03>>
 * <<TA_A_26661_04>>
 * <<TA_A_26662_01>>
+* <<TA_A_26988_05>>
+* <<TA_A_26988_07>>
 * <<TA_A_27401_01>>
 * <<TA_A_27496_01>>
 * <<TA_A_27496_02>>
@@ -215,7 +221,9 @@ sequenceDiagram
 [.lead]
 Feature-Datei zu diesem Use Case:
 
+ifdef::render_features[]
 [source]
 ----
-#include::Client_authentisierung_und_autorisierung_software_attest_SC_403.feature[]
+include::Client_authentisierung_und_autorisierung_software_attest_SC_403.feature[]
 ----
+endif::[]

@@ -1,0 +1,12 @@
+[#TA_A_25644-01_05]
+===== TA_A_25644-01_05 - PDP Client-Registrierung mit Software Attestation / Linux
+
+Die Komponente Authorization Server MUSS die Clients bei der Registrierung über
+
+folgende Mechanismen attestieren:
+
+[ ... ]
+
+• Software Attestation für [ ... ] Linux Clients
+
+[ ... ]

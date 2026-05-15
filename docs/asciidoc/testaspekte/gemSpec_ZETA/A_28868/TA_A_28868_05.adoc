@@ -1,0 +1,4 @@
+[#TA_A_28868_05]
+===== TA_A_28868_05 - TLS-Verbindung zwischen Zeta-Client und Zeta-Guard - ZETA Guard Schlüssellängen und Domainparameter
+
+"Alle verwendeten Schlüssellängen und Domainparameter (bspw. ECC-Kurven-Parameter) MÜSSEN nach [TR-02102-2, Abschnitt 3.6] empfohlen sein. **[<=]**"

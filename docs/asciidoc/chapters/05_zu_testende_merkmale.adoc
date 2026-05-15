@@ -11,12 +11,22 @@ include::../tables/generated/features_table.adoc[]
 
 Diese Übersicht stellt den gemeldeten Umsetzungsstand den bereits durch die Testsuite abgedeckten Anforderungen gegenüber.
 Die Produktstatus-Angaben werden aus ``docs/asciidoc/tables/source/product_implementation.csv`` gelesen.
-Die CSV verwendet deutschsprachige Spaltenköpfe (``Anforderung``, optional ``Titel`` als Lesehilfe, ``umgesetzt``, ``Hinweis``); für den Umsetzungsstand bitte ``ja``, ``nein`` oder ``teilweise`` verwenden.
-Der optionale Titel wird von der Generierung ignoriert.
-Die Spalte „im Produkt umgesetzt“ zeigt die gemeldete Implementierung, „getestet“ fasst die Testsuite-Abdeckung pro Anforderung zusammen und „Hinweise“ heben Differenzen oder fehlende Angaben hervor.
-Die Spalte „Testabdeckung“ zeigt den Anteil implementierter Testaspekte pro Anforderung als Prozentwert (implementiert/gesamt).
+Die CSV verwendet deutschsprachige Spaltenköpfe (``Anforderung``, optional ``Titel`` als Lesehilfe, ``umgesetzt``, ``Hinweis``).
+Der Umsetzungsstand ist in ``ja``, ``nein`` oder ``teilweise`` klassifiziert.
+
+Die Spalte
+
+- "im Produkt umgesetzt" zeigt die gemeldete Implementierung,
+- "getestet" fasst die Testsuite-Abdeckung pro Anforderung zusammen,
+- "Hinweise" heben Differenzen oder fehlende Angaben hervor und
+- "Testabdeckung" zeigt den Anteil implementierter Testaspekte pro Anforderung als Prozentwert (implementiert/gesamt).
+
 Die in diesem Abschnitt dargestellte Testsuite-Abdeckung wird ausschließlich aus Testaspekt-Katalogen und Feature-Tags abgeleitet und bewusst nicht mit Laufzeit-Ergebnissen vermischt.
-Die Spalte „getestet“ wird dabei wie folgt interpretiert: Der Wert ``ja`` bedeutet, dass alle Testaspekte der Anforderung mit mindestens einem Use-Case-Szenario implementiert sind. Der Wert ``teilweise`` kennzeichnet Anforderungen, bei denen mindestens ein Testaspekt umgesetzt ist, jedoch nicht der vollständige Satz. Der Wert ``nein`` steht für Anforderungen ohne implementierten Testaspekt oder ohne vorhandene Testaspekte.
+Die Spalte "getestet" wird dabei wie folgt interpretiert:
+
+- ``ja`` bedeutet, dass alle Testaspekte der Anforderung mit mindestens einem Use-Case-Szenario implementiert sind,
+- ``teilweise`` kennzeichnet Anforderungen, bei denen mindestens ein Testaspekt umgesetzt ist, jedoch nicht der vollständige Satz und
+- ``nein`` steht für Anforderungen ohne implementierten Testaspekt oder ohne vorhandene Testaspekte.
 
 Die Kategorien entsprechen den Diagrammen zur Testabdeckung in diesem Kapitel.
 
@@ -34,27 +44,19 @@ include::../diagrams/generated/product-gap-summary.mmd[]
 
 include::../tables/generated/product_gap_summary.adoc[]
 
-=== Bedrohungsanalyse: Priorisierte Anforderungen
-
-Diese Übersicht zeigt Anforderungen aus der Bedrohungsanalyse mit erhöhter Testpriorität.
-Die Eingabedaten kommen aus ``docs/asciidoc/tables/source/bedrohungsanalyse_requirements.csv`` (Spalten: ``Anforderung``, optional ``Priorität``, optional ``Begründung``). Auf dieser Basis wird die Priorität je Anforderung auf die zugeordneten Testaspekte abgebildet und in eine Soll-Anzahl von Szenarien übersetzt. Als Zielgröße gilt je Testaspekt: bei Priorität ``hoch`` drei Szenarien (sofern möglich), bei ``mittel`` zwei und bei ``niedrig`` ein Szenario. Die Erfüllung wird auf Anforderungsebene als Verhältnis ``TA erfüllt / TA gesamt`` inklusive Prozentwert ausgewiesen. Als Ist-Wert werden eindeutige Szenarien je Testaspekt gezählt; Laufzeit-Ausführungen derselben Szenarien werden dabei nicht mehrfach berücksichtigt.
-
-==== Bedrohungsanalyse-Übersicht je Anforderung
-
-include::../tables/generated/bedrohungsanalyse_summary.adoc[]
-
-==== Offene Bedrohungsanalyse-Lücken je Testaspekt
-
-Diese Tabelle enthält nur nicht erfüllte Testaspekte.
-Die Spalte ``Ist/Soll`` zeigt die Abdeckung als Bruch inkl. Prozentwert.
-
-include::../tables/generated/bedrohungsanalyse_gaps.adoc[]
-
 === Testabdeckung der Anforderungen
 
-Die Abdeckungsmetriken basieren ausschließlich auf den modellierten Testaspekten und den Feature-Tags; Laufzeitdaten werden für diese Diagramme nicht verwendet.
-Die Diagramme werden mit ``uv run --project docs/scripts traceability --project-root .`` erzeugt; derselbe Schritt ist im Maven-Profil ``generate-documentation`` integriert.
-Die Berechnung stützt sich auf Anforderungen aus ``docs/asciidoc/afos`` und Testaspekte aus ``docs/asciidoc/testaspekte``; die Zuordnung erfolgt über den jeweiligen Anforderungsordner. Ein Testaspekt gilt als implementiert, sobald mindestens ein Szenario mit entsprechendem ``TA_*``-Tag vorhanden ist. Szenarien ohne Testaspekt-Tag fließen nicht in die Kennzahlen ein. Anforderungs-Tags ``A_*`` sowie ``@product_not_impl``-Tags werden für diese Metriken nicht ausgewertet. Die Abdeckung wird als Anzahl eindeutiger Testaspekte bewertet, nicht als Anzahl der Szenarioausführungen. Eine Anforderung wird als vollständig abgedeckt eingestuft, wenn alle zugehörigen Testaspekte implementiert sind; sie gilt als teilweise abgedeckt, wenn nur ein Teil umgesetzt ist; sie gilt als nicht abgedeckt, wenn Testaspekte vorhanden sind, aber keiner implementiert ist; und sie fällt in die Kategorie „keine Testaspekte“, wenn keine Zuordnung vorliegt.
+Die Abdeckungsmetriken basieren ausschließlich auf den modellierten Testaspekten und den Feature-Tags, es werden keine Laufzeitdaten für diese Diagramme verwendet.
+Diagramme werden mit ``uv run --project docs/scripts traceability --project-root .`` erzeugt, wobei derselbe Schritt im Maven-Profil ``generate-documentation`` integriert ist.
+Die Berechnung stützt sich auf Anforderungen aus ``docs/asciidoc/afos`` und Testaspekte aus ``docs/asciidoc/testaspekte``.
+Die Zuordnung erfolgt über den jeweiligen Anforderungsordner.
+Ein Testaspekt gilt als implementiert, sobald mindestens ein Szenario mit entsprechendem ``TA_*``-Tag vorhanden ist.
+Szenarien ohne Testaspekt-Tag fließen nicht in die Kennzahlen ein.
+Anforderungs-Tags ``A_*`` sowie ``@product_not_impl``-Tags werden für diese Metriken nicht ausgewertet.
+Die Abdeckung wird als Anzahl eindeutiger Testaspekte bewertet, nicht als Anzahl der Szenarioausführungen.
+Eine Anforderung wird als vollständig abgedeckt eingestuft, wenn alle zugehörigen Testaspekte implementiert sind.
+Sie gilt als teilweise abgedeckt, wenn nur ein Teil umgesetzt ist, und als nicht abgedeckt, wenn Testaspekte vorhanden sind, aber keiner implementiert ist.
+Des Weiteren fällt sie in die Kategorie "keine Testaspekte", wenn keine Zuordnung vorliegt.
 
 [mermaid,traceability-coverage-requirements,svg]
 ....
@@ -64,7 +66,7 @@ include::../diagrams/generated/traceability-coverage-requirements.mmd[]
 === Anforderungen mit mindestens einem implementierten Testaspekt
 
 Dieses Diagramm fasst Anforderungen zusammen, die durch mindestens einen implementierten Testaspekt abgedeckt werden.
-Anforderungen ohne Testaspekte gelten hier als „kein Testaspekt implementiert“.
+Anforderungen ohne Testaspekte gelten hier als "kein Testaspekt implementiert".
 
 [mermaid,traceability-coverage-requirements-tested,svg]
 ....
@@ -89,6 +91,38 @@ Sie zeigt pro Kombination, ob ein Szenario vorhanden ist.
 
 include::../tables/generated/traceability_matrix.adoc[]
 
+=== MASVS-Abdeckung
+
+Diese Übersicht ordnet die sicherheitsbezogenen Kategorien aus dem Sicherheitstestplan den Anforderungen und automatisierten Szenarien zu.
+Die Zuordnung basiert auf ``docs/masvs_mapping.csv`` und den ``@MASVS-``-Tags in den Feature-Dateien.
+Damit wird die risikobasierte Sicht direkt aus der fachlich abgestimmten Sicherheitsklassifikation abgeleitet.
+Die CSV beschreibt, welche AFOs zu welchen MASVS-Kategorien gehören.
+Die Feature-Tags belegen anschließend, dass diese Kategorien in konkreten Use Cases und Szenarien umgesetzt sind.
+Der CI-Schritt ``tag-masvs-scenarios --check`` prüft vor der Traceability-Generierung, dass Szenarien mit gemappten AFO-Tags auch die erforderlichen ``@MASVS-``-Tags tragen.
+Dadurch entsteht ein stabiler Nachweis vom Sicherheitstestplan über die Anforderung bis zum automatisierten Test.
+
+[mermaid,masvs-traceability-flow,svg]
+....
+flowchart LR
+  STP["Sicherheitstestplan"] --> MAP["docs/masvs_mapping.csv"]
+  MAP --> AFO["AFO Anforderung"]
+  AFO --> TAG["MASVS Feature-Tag"]
+  TAG --> SCN["BDD-Szenario"]
+  SCN --> TBL["MASVS-Abdeckung im Testplan"]
+  TBL --> QG["CI- und Abnahme-Nachweis"]
+....
+
+==== MASVS-Abdeckung je Kategorie
+
+include::../tables/generated/masvs_coverage_by_category.adoc[]
+
+==== MASVS-Abdeckung je Anforderung
+
+include::../tables/generated/masvs_coverage_by_requirement.adoc[]
+
 === Laufzeit-Traceability-Artefakte
 
-Zusätzlich zu den statischen Dokumentationsartefakten erzeugt die Testsuite nach jedem Testlauf Laufzeit-CSV-Dateien, die für die operative Traceability-Auswertung und Fehlersuche genutzt werden können. Standardmäßig werden diese Artefakte im Verzeichnis ``target/traceability`` abgelegt; bei gesetzter Serenity-Ausgabekonfiguration werden sie entsprechend im jeweiligen Serenity-Ausgabeverzeichnis geschrieben. Inhaltlich umfassen sie insbesondere ``runtime_coverage.csv`` (anforderungsbezogene Laufzeitabdeckung), ``runtime_coverage_testaspects.csv`` (Laufzeitabdeckung je Testaspekt) sowie ``runtime_coverage_meta.csv`` (Kontextinformationen zum Testlauf). Diese Dateien ergänzen die in diesem Kapitel dargestellten, modellbasierten Kennzahlen und dienen als Laufzeitnachweis.
+Zusätzlich zu den statischen Dokumentationsartefakten erzeugt die Testsuite nach jedem Testlauf Laufzeit-CSV-Dateien, die für die operative Traceability-Auswertung und Fehlersuche genutzt werden können.
+Standardmäßig werden diese Artefakte im Verzeichnis ``target/traceability`` abgelegt; bei gesetzter Serenity-Ausgabekonfiguration werden sie entsprechend im jeweiligen Serenity-Ausgabeverzeichnis geschrieben.
+Inhaltlich umfassen sie insbesondere ``runtime_coverage.csv`` (anforderungsbezogene Laufzeitabdeckung), ``runtime_coverage_testaspects.csv`` (Laufzeitabdeckung je Testaspekt) sowie ``runtime_coverage_meta.csv`` (Kontextinformationen zum Testlauf).
+Diese Dateien ergänzen die in diesem Kapitel dargestellten, modellbasierten Kennzahlen und dienen als Laufzeitnachweis.

@@ -21,28 +21,24 @@ Es wird geprüft, dass zentrale ZETA Guard Komponenten OpenTelemetry-konforme Lo
 | Vorbedingung: |
 . OpenSearch ist erreichbar.
 . Prometheus ist erreichbar.
+. Kubernetes-Zugriff ist für konfigurationsbasierte Telemetrie-Prüfungen verfügbar.
 . Die ZETA Guard Umgebung erzeugt und exportiert Telemetriedaten.
 
 | Nebenbedingung: |
 Nur Testaspekte ohne dedizierten Trigger und ohne passende Zuordnung zu einem fachlichen Use Case werden hier geprüft.
 
 | Ablauf: |
+. Die Testsuite prüft die gerenderte Telemetrie-Gateway Collector-Konfiguration auf einen OTLP-gRPC- oder OTLP-HTTP/JSON-Exporter, der von einer Service-Pipeline verwendet wird.
 . Die Testsuite fragt OpenSearch mit komponentenspezifischen Suchkriterien ab.
+. Die Testsuite fragt Jaeger mit komponentenspezifischen Suchkriterien ab.
 . Die Testsuite fragt Prometheus mit komponentenspezifischen Suchkriterien ab.
-. Die Antwort wird auf HTTP-Status und vorhandene Treffer validiert.
+. Die Antworten werden auf HTTP-Status und vorhandene Treffer validiert.
 
 | Nachbedingung: |
 Die grundlegende Verfügbarkeit querschnittlicher Telemetriedaten ist verifiziert.
 
 | Abgedeckte Testaspekte: |
-* <<TA_A_26988_01>>
-* <<TA_A_26988_02>>
-* <<TA_A_26988_03>>
-* <<TA_A_26988_05>>
-* <<TA_A_26988_06>>
-* <<TA_A_26988_07>>
-* <<TA_A_26988_10>>
-* <<TA_A_26988_11>>
+* <<TA_A_27261_01>>
 * <<TA_A_27264_01>>
 * <<TA_A_27264_02>>
 * <<TA_A_27264_03>>
@@ -65,6 +61,8 @@ Die grundlegende Verfügbarkeit querschnittlicher Telemetriedaten ist verifizier
 * <<TA_A_27264_26>>
 * <<TA_A_27264_27>>
 * <<TA_A_27492-02_03>>
+* <<TA_A_27727-01_01>>
+* <<TA_A_27727-01_02>>
 
 |===
 

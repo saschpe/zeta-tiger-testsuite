@@ -24,7 +24,6 @@
 
 package de.gematik.zeta.steps;
 
-import de.gematik.test.tiger.lib.reports.SerenityReportUtils;
 import de.gematik.zeta.services.WebSocketLoadService;
 import io.cucumber.java.After;
 import io.cucumber.java.de.Dann;
@@ -131,6 +130,6 @@ public class WebSocketLoadSteps {
         failures,
         webSocketLoadService.getRecentFailures(5));
     log.warn("[WEBSOCKET LOAD] {} {}", title, reportText);
-    SerenityReportUtils.addCustomData(title, reportText);
+    ReportAttachments.addText(title, reportText);
   }
 }

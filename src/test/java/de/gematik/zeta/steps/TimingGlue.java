@@ -201,6 +201,44 @@ public class TimingGlue {
   }
 
   /**
+   * Verifies that the currently selected request with the given path was sent before the previous
+   * request with the same path reached the configured cache lifetime.
+   *
+   * @param pathPattern path value or regex to identify both requests
+   * @param maxAgeSeconds cache lifetime in seconds that must not be reached
+   */
+  @Dann("prüfe, dass die aktuelle Anfrage mit Pfad {tigerResolvedString} vor Ablauf von {int} Sekunden seit der vorherigen Anfrage mit diesem Pfad gesendet wurde")
+  @Then("verify current request with path {tigerResolvedString} was sent before {int} seconds elapsed since the previous request with this path")
+  public void verifyCurrentRequestWasSentBeforePreviousMatchingRequestExpired(String pathPattern, int maxAgeSeconds) {
+    var messages = RbelMessageRetriever.getInstance().getMessageHistory().getMessages();
+    if (messages == null || messages.isEmpty()) {
+      throw new AssertionError("No RBEL messages recorded – cannot determine request timing.");
+    }
+
+    var currentRequest = RbelMessageRetriever.getInstance().getCurrentRequest();
+    if (currentRequest == null) {
+      throw new AssertionError("No current request available – cannot determine request timing.");
+    }
+    if (!matchesPath(currentRequest, pathPattern)) {
+      throw new AssertionError("Current request " + currentRequest.getUuid()
+          + " does not match path pattern '" + pathPattern + "'.");
+    }
+
+    var previousRequest = findPreviousRequestMatchingPath(messages, currentRequest, pathPattern);
+    if (previousRequest == null) {
+      throw new AssertionError("No previous request found for path '" + pathPattern + "'.");
+    }
+
+    var elapsed = getDurationBetweenRequests(previousRequest, currentRequest);
+    var maxAge = Duration.ofSeconds(Math.abs(maxAgeSeconds));
+    if (elapsed.isNegative() || elapsed.compareTo(maxAge) >= 0) {
+      throw new AssertionError("Current request to path '" + pathPattern + "' was sent "
+          + elapsed.toMillis() + " ms after the previous request, expected less than "
+          + maxAge.toMillis() + " ms.");
+    }
+  }
+
+  /**
    * Finds the response message that belongs to a given request by inspecting the
    * {@link TracingMessagePairFacet} of the provided messages.
    *
@@ -241,16 +279,92 @@ public class TimingGlue {
     return duration;
   }
 
+  /**
+   * Calculates the elapsed time between two request messages.
+   *
+   * @param previousRequest the earlier request message
+   * @param currentRequest the later request message
+   * @return duration between the two request transmission timestamps
+   * @throws AssertionError if either request lacks the required timing facet
+   */
+  private Duration getDurationBetweenRequests(@NonNull RbelElement previousRequest,
+      @NonNull RbelElement currentRequest) {
+    var previousTiming = requireTimingFacet(previousRequest, "previous request " + previousRequest.getUuid());
+    var currentTiming = requireTimingFacet(currentRequest, "current request " + currentRequest.getUuid());
+
+    var duration = Duration.between(previousTiming.getTransmissionTime(),
+        currentTiming.getTransmissionTime());
+
+    log.info("Duration between previous request with UUID: {} and current request with UUID: {} "
+            + "taken from Tiger Message logs is {} ms", previousRequest.getUuid(), currentRequest.getUuid(),
+        duration.toMillis());
+
+    return duration;
+  }
+
+  /**
+   * Finds the previous request matching a path before the current request in recorded message order.
+   *
+   * @param messages recorded RBEL messages
+   * @param currentRequest currently selected request
+   * @param pathPattern path value or regex to identify candidate requests
+   * @return last matching request before {@code currentRequest}, or {@code null} if none exists
+   */
+  private RbelElement findPreviousRequestMatchingPath(Collection<RbelElement> messages, RbelElement currentRequest,
+      String pathPattern) {
+    RbelElement previousRequest = null;
+    for (var message : messages) {
+      if (message == null) {
+        continue;
+      }
+      if (message.getUuid().equals(currentRequest.getUuid())) {
+        return previousRequest;
+      }
+      if (isRequestMessage(message) && matchesPath(message, pathPattern)) {
+        previousRequest = message;
+      }
+    }
+    return previousRequest;
+  }
+
+  /**
+   * Finds the first request matching a path and node value.
+   *
+   * @param messages recorded RBEL messages
+   * @param pathPattern path value or regex to identify the request
+   * @param rbelPath RBEL path whose value must match {@code expectedValueRegex}
+   * @param expectedValueRegex value or regex to match at {@code rbelPath}
+   * @return first matching request, or {@code null} if none exists
+   */
   private RbelElement findFirstRequestMatchingPathAndNode(Collection<RbelElement> messages, String pathPattern,
       String rbelPath, String expectedValueRegex) {
     return messages.stream()
         .filter(Objects::nonNull)
+        .filter(this::isRequestMessage)
         .filter(message -> matchesPath(message, pathPattern))
         .filter(message -> matchesNodeValue(message, rbelPath, expectedValueRegex))
         .findFirst()
         .orElse(null);
   }
 
+  /**
+   * Checks whether an RBEL message represents a request with a path.
+   *
+   * @param message the RBEL message to inspect
+   * @return {@code true} if the message has a path and no response code
+   */
+  private boolean isRequestMessage(RbelElement message) {
+    return !message.findRbelPathMembers("$.path").isEmpty()
+        && message.findRbelPathMembers("$.responseCode").isEmpty();
+  }
+
+  /**
+   * Checks whether a message has a path equal to or matching the path pattern.
+   *
+   * @param message RBEL message
+   * @param pathPattern path value or regex
+   * @return {@code true} if the message path matches
+   */
   private boolean matchesPath(RbelElement message, String pathPattern) {
     return message.findRbelPathMembers("$.path").stream()
         .map(RbelElement::getRawStringContent)
@@ -259,6 +373,14 @@ public class TimingGlue {
         .anyMatch(actualPath -> actualPath.equals(pathPattern) || Pattern.compile(pathPattern).matcher(actualPath).find());
   }
 
+  /**
+   * Checks whether a message contains a node value matching the expected pattern.
+   *
+   * @param message RBEL message
+   * @param rbelPath RBEL path to inspect
+   * @param expectedValueRegex expected value or regex
+   * @return {@code true} if at least one node value matches
+   */
   private boolean matchesNodeValue(RbelElement message, String rbelPath, String expectedValueRegex) {
     Pattern pattern = Pattern.compile(expectedValueRegex);
     return message.findRbelPathMembers(rbelPath).stream()

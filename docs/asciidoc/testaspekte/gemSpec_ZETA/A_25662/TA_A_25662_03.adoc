@@ -7,4 +7,4 @@ Die Komponente **Authorization Server MUSS erzwingen**, dass der Nutzer eine
 
 **Authentisierung durchführen** muss, wenn seit der letzten Authentisierung **die Zeit der**
 
-**Gültigkeitsdauer des Refresh Tokens abgelaufen** ist.[<=]
+**Gültigkeitsdauer des Refresh Token abgelaufen** ist.[<=]

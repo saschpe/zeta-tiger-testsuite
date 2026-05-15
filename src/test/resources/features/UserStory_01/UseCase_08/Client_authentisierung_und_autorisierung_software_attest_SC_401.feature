@@ -27,13 +27,11 @@
 @UseCase_01_08
 Funktionalität: Client_authentisierung_und_autorisierung_software_attest_SC_401
 
-  @dev
   @A_25783-01
   @A_27007
-  @A_26661
   @TA_A_25783-01_02
   @TA_A_27007_03
-  @TA_A_26661_03
+  @MASVS-AUTH
   Szenario: Erneute Authentifizierung nach 401 Unauthorized
     Gegeben sei TGR setze lokale Variable "unauthorizedCondition" auf "isResponse && request.path =~ '.*${paths.guard.tokenEndpointPath}'"
     Und Setze im TigerProxy für die Nachricht "${unauthorizedCondition}" die Manipulation auf Feld "$.responseCode" und Wert "401" und 1 Ausführungen
@@ -57,3 +55,59 @@ Funktionalität: Client_authentisierung_und_autorisierung_software_attest_SC_401
     # TA_A_25783-01_02 - Anweisung befolgen erneute Authentifizierung
     Und TGR prüfe aktueller Request enthält Knoten "$.body.subject_token"
     Und TGR prüfe aktueller Request stimmt im Knoten "$.body.subject_token" nicht überein mit "${firstSubjectToken}"
+
+  @A_26661
+  @A_27802-02
+  @TA_A_26661_03
+  @TA_A_27802-02_01
+  @TA_A_27802-02_02
+  @dev
+  @MASVS-CRYPTO
+  Szenario: Client Assertion JWT Manipulation Test - Token Request mit fremdem issuer
+    Wenn TGR setze lokale Variable "accessTokenTtl" auf "5"
+    Und TGR setze lokale Variable "refreshTokenTtl" auf "15"
+    Und TGR setze lokale Variable "refreshTokenWait" auf "!{${refreshTokenTtl} + 2}"
+    Und TGR setze lokale Variable "opaCondition" auf "isResponse && request.path =~ '.*${paths.opa.decisionPath}'"
+    Dann Setze im TigerProxy für die Nachricht "${opaCondition}" die Manipulation auf Feld "$.body.result.ttl.refresh_token" und Wert "${refreshTokenTtl}" und 1 Ausführungen
+    Und Setze im TigerProxy für die Nachricht "${opaCondition}" die Manipulation auf Feld "$.body.result.ttl.access_token" und Wert "${accessTokenTtl}" und 1 Ausführungen
+
+    Gegeben sei TGR sende eine leere GET Anfrage an "${paths.client.reset}"
+    Wenn TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
+
+    Dann TGR finde die erste Anfrage mit Pfad "${paths.guard.tokenEndpointPath}"
+    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "200"
+    Und TGR prüfe aktuelle Antwort enthält Knoten "$.body.refresh_token.body.exp"
+    Und TGR speichere Wert des Knotens "$.body.refresh_token.body.exp" der aktuellen Antwort in der Variable "session_expiry"
+
+    Und warte "${refreshTokenWait}" Sekunden
+    Und validiere, dass der Zeitstempel "${session_expiry}" in der Vergangenheit liegt
+    Und TGR lösche aufgezeichnete Nachrichten
+
+    Wenn TGR sende eine leere GET Anfrage an "${paths.client.storage}"
+    Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.client.storagePath}"
+    Und TGR speichere Wert des Knotens "$.body.client_private_key" der aktuellen Antwort in der Variable "CLIENT_PRIVATE_KEY"
+    Und TGR setze lokale Variable "pathCondition" auf "message.path =~ '.*${paths.guard.tokenEndpointPath}' && message.body.grant_type =~ '.*token-exchange'"
+
+    Dann Setze im TigerProxy für JWT in "$.body.client_assertion" das Feld "body.iss" auf Wert "evil_client" mit privatem Schlüssel "${CLIENT_PRIVATE_KEY}" für Pfad "${pathCondition}" und 1 Ausführungen und ersetze JWK
+    Und TGR lösche aufgezeichnete Nachrichten
+
+    Wenn TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
+
+    Dann TGR finde die letzte Anfrage mit Pfad "${paths.guard.tokenEndpointPath}" und Knoten "$.body.client_assertion.body.iss" der mit "evil_client" übereinstimmt
+    Und TGR prüfe aktueller Request stimmt im Knoten "$.body.grant_type" überein mit "urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Atoken-exchange"
+    #@TA_A_26661_03
+    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "401"
+
+  @A_26661
+  @TA_A_26661_03
+  @dev
+  @MASVS-AUTH
+  Szenario: Nutzerauthentifizierung mittels SM(C)-B signiertem Subject Token mit manipulierter Signatur wird abgelehnt (Negativtest)
+    Wenn TGR sende eine leere GET Anfrage an "${paths.client.reset}"
+    Und TGR lösche aufgezeichnete Nachrichten
+    # JWT-Payload ändern ohne Neusignierung => Signatur ungültig
+    Und Setze im TigerProxy für JWT in "$.body.subject_token" das Feld "body.jti" auf Wert "changed-jti" für Pfad ".*${paths.guard.tokenEndpointPath}" und 1 Ausführungen
+    Und TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
+
+    Dann TGR finde die erste Anfrage mit Pfad "${paths.guard.tokenEndpointPath}" und Knoten "$.body.subject_token.body.jti" der mit "changed-jti" übereinstimmt
+    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "401"

@@ -19,8 +19,10 @@ tiger_set_defaults() {
   : "${OPENSEARCH_URL:=}"
   : "${ZETA_TLS_TEST_TOOL_SERVICE_URL:=}"
   : "${ZETA_TEST_CERTIFICATES_DIR:=}"
+  : "${ALLOW_PERFORMANCE_TESTS:=}"
+  : "${ALLOW_LONGRUNNING_TESTS:=}"
   : "${PROFILE:=}"
-  : "${CUCUMBER_TAGS:=@smoke}"
+  : "${CUCUMBER_TAGS:=}"
 }
 
 tiger_cd_app() {
@@ -44,6 +46,8 @@ tiger_common_property_args() {
   zeta_proxy_arg="$(tiger_property_arg_from_env ZETA_PROXY_URL zeta_proxy_url)"
   zeta_k8s_namespace_arg="$(tiger_property_arg_from_env ZETA_K8S_NAMESPACE zeta_k8s_namespace)"
   allow_deployment_modification_arg="$(tiger_property_arg_from_env ALLOW_DEPLOYMENT_MODIFICATION allow_deployment_modification)"
+  allow_performance_tests_arg="$(tiger_property_arg_from_env ALLOW_PERFORMANCE_TESTS allow_performance_tests)"
+  allow_longrunning_tests_arg="$(tiger_property_arg_from_env ALLOW_LONGRUNNING_TESTS allow_longrunning_tests)"
   opensearch_arg="$(tiger_property_arg_from_env OPENSEARCH_URL opensearch_url)"
   zeta_tls_test_tool_service_url_arg="$(tiger_property_arg_from_env ZETA_TLS_TEST_TOOL_SERVICE_URL zeta_tls_test_tool_service_url)"
   test_certificates_dir_arg="$(tiger_property_arg_from_env ZETA_TEST_CERTIFICATES_DIR testCertificates.dir)"
@@ -53,6 +57,8 @@ tiger_common_property_args() {
   [ -n "${zeta_proxy_arg}" ] && args="${args} ${zeta_proxy_arg}"
   [ -n "${zeta_k8s_namespace_arg}" ] && args="${args} ${zeta_k8s_namespace_arg}"
   [ -n "${allow_deployment_modification_arg}" ] && args="${args} ${allow_deployment_modification_arg}"
+  [ -n "${allow_performance_tests_arg}" ] && args="${args} ${allow_performance_tests_arg}"
+  [ -n "${allow_longrunning_tests_arg}" ] && args="${args} ${allow_longrunning_tests_arg}"
   [ -n "${opensearch_arg}" ] && args="${args} ${opensearch_arg}"
   [ -n "${zeta_tls_test_tool_service_url_arg}" ] && args="${args} ${zeta_tls_test_tool_service_url_arg}"
   [ -n "${test_certificates_dir_arg}" ] && args="${args} ${test_certificates_dir_arg}"

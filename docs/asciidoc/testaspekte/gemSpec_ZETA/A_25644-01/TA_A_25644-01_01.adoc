@@ -1,0 +1,10 @@
+[#TA_A_25644-01_01]
+===== TA_A_25644-01_01 - PDP Client-Registrierung mit Android Key and ID Attestation
+
+Die Komponente Authorization Server MUSS die Clients bei der Registrierung über
+
+folgende Mechanismen attestieren:
+
+• Android Key and ID Attestation (für Google-Android Clients)
+
+[ ... ]

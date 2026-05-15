@@ -83,10 +83,12 @@ public class TestDriverConfigurationService {
   /**
    * Configures the testdriver resource target and trusted CA PEM.
    *
-   * @param resource protected resource base URL the client should call
-   * @param caCertificatePem PEM-encoded CA certificate to trust
+   * @param resource                     protected resource base URL the client should call
+   * @param caCertificatePem             PEM-encoded CA certificate to trust
+   * @param clientDisableTlsVerification whether the client should disable TLS verification
    */
-  public void configure(String resource, String caCertificatePem) {
+  public void configure(String resource, String caCertificatePem,
+      boolean clientDisableTlsVerification) {
     Objects.requireNonNull(resource, "resource must not be null");
     Objects.requireNonNull(caCertificatePem, "caCertificatePem must not be null");
 
@@ -94,7 +96,8 @@ public class TestDriverConfigurationService {
     headers.setContentType(MediaType.APPLICATION_JSON);
     var body = Map.of(
         "resource", resource,
-        "caCertificatePem", caCertificatePem);
+        "caCertificatePem", caCertificatePem,
+        "disableTlsVerification", clientDisableTlsVerification);
     exchange(configureUrl, HttpMethod.POST, jsonEntity(body, headers));
   }
 

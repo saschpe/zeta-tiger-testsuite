@@ -1,0 +1,6 @@
+[#TA_A_25432-01_01]
+===== TA_A_25432-01_01 - ZETA Client - Ablauf Client-Registrierung - Registrierung am Authorization Server
+
+Der mobile ZETA Client (oder ein stationärer Client) für Versicherte MUSS, sofern er an Schnittstellen der Telematikinfrastruktur wegen einer ungültigen/fehlenden Client-Registrierung abgewiesen wird, **eine Registrierung am Authorization Server durchführen**, +++[...]+++. 
+
+**[<=]**

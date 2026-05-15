@@ -69,18 +69,15 @@ Der ZETA Client verfügt über ein gültiges PoPP Token sowie auch eine bestehen
 Der MA hat über den ZETA Client die geschützte Ressource erfolgreich abgerufen und kann diese nun verwenden.
 
 | Abgedeckte Testaspekte: |
-* <<TA_A_25669-01_02>>
 * <<TA_A_25669-01_05>>
+* <<TA_A_26452_03>>
 * <<TA_A_26477_01>>
 * <<TA_A_26477_02>>
 * <<TA_A_26477_03>>
-* <<TA_A_26477_05>>
-* <<TA_A_26477_06>>
 * <<TA_A_26477_07>>
-* <<TA_A_26477_13>>
+* <<TA_A_26477_05>>
 * <<TA_A_26477_08>>
-* <<TA_A_26477_11>>
-* <<TA_A_26661_20>>
+* <<TA_A_26477_12>>
 
 |===
 

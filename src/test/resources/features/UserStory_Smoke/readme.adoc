@@ -53,7 +53,11 @@ Abgebildet durch: <<UC_SMOKE_03>>
 === Identifizierte Use Cases
 
 :leveloffset: +2
+
 include::UseCase_01/readme.adoc[]
+
 include::UseCase_02/readme.adoc[]
+
 include::UseCase_03/readme.adoc[]
+
 :leveloffset: -2

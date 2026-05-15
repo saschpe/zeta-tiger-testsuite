@@ -27,47 +27,170 @@
 @UseCase_01_17
 Funktionalität: Client_ressource_anfrage_fachdienst_PoPP-Header_SC_403
 
+  @A_26477
+  @A_26661
+  @TA_A_26477_08
+  @TA_A_26661_20
+  @MASVS-AUTH
+  Szenario: PoPP Token mit abweichender actorId wird abgelehnt
+    Gegeben sei TGR sende eine leere GET Anfrage an "${paths.client.reset}"
+
+    Wenn TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
+    Dann TGR finde die letzte Anfrage mit dem Pfad "^${paths.fachdienst.helloZetaPath}"
+    Und TGR speichere Wert des Knotens "${headers.authorization.dpopToken.body.sub}" der aktuellen Anfrage in der Variable "ACCESS_TOKEN_SUB"
+
+    Und TGR setze lokale Variable "PoPP_PRIVATE_KEY" auf "!{file('src/test/resources/keys/popp-token-server_ecKey.pem')}"
+    Und TGR setze lokale Variable "pathCondition" auf ".*${paths.guard.helloZetaPath}"
+    Und TGR setze lokale Variable "WRONG_ACTOR_ID" auf "evil_client"
+
+    # Für die Claim-Prüfung wird das PoPP-Token weiter mit dem echten PoPP-Server-Key signiert.
+    Dann Setze im TigerProxy für JWT in "${headers.popp.strict}" das Feld "body.actorId" auf Wert "${WRONG_ACTOR_ID}" mit privatem Schlüssel "${PoPP_PRIVATE_KEY}" für Pfad "${pathCondition}" und 1 Ausführungen und ersetze JWK
+
+    Gegeben sei TGR lösche aufgezeichnete Nachrichten
+    Gegeben sei TGR sende eine leere GET Anfrage an "${paths.client.reset}"
+    Wenn TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
+
+    Dann TGR finde die letzte Anfrage mit Pfad "${paths.guard.helloZetaPath}" und Knoten "${headers.popp.body.actorId}" der mit "${WRONG_ACTOR_ID}" übereinstimmt
+    Und TGR speichere Wert des Knotens "${headers.popp.root}" der aktuellen Anfrage in der Variable "PoPP_TOKEN"
+    Und verifiziere die ES256 Signatur des JWT "${PoPP_TOKEN}"
+    Und TGR prüfe aktueller Request stimmt im Knoten "${headers.popp.body.actorId}" nicht überein mit "${ACCESS_TOKEN_SUB}"
+    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "403"
+
+  @A_26477
+  @A_26493-01
+  @TA_A_26477_13
+  @TA_A_26493-01_01
+  @MASVS-AUTH
+  Szenario: PoPP JWKS wird bei unbekanntem PoPP kid heruntergeladen
+    Gegeben sei TGR sende eine leere GET Anfrage an "${paths.client.reset}"
+    Und TGR setze lokale Variable "poppSignedJwksPath" auf "${paths.popp.signedJwks}"
+    Und TGR setze lokale Variable "poppSignedJwksResponseCondition" auf "isResponse && request.path =~ '.*${poppSignedJwksPath}'"
+    Und TGR setze lokale Variable "PoPP_PRIVATE_KEY" auf "!{file('src/test/resources/keys/popp-token-server_ecKey.pem')}"
+    Und TGR setze lokale Variable "pathCondition" auf ".*${paths.guard.helloZetaPath}"
+    Und TGR setze lokale Variable "UNKNOWN_POPP_KID" auf "unknown_popp_kid"
+
+    # Ein unbekanntes kid macht ein vorhandenes JWKS für diese Signaturprüfung unzureichend.
+    Dann Setze im TigerProxy für JWT in "${headers.popp.strict}" das Feld "header.kid" auf Wert "${UNKNOWN_POPP_KID}" mit privatem Schlüssel "${PoPP_PRIVATE_KEY}" für Pfad "${pathCondition}" und 1 Ausführungen
+
+    Gegeben sei TGR lösche aufgezeichnete Nachrichten
+    Wenn TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
+
+    Dann TGR finde die letzte Anfrage mit Pfad "${paths.guard.helloZetaPath}" und Knoten "${headers.popp.root}.header.kid" der mit "${UNKNOWN_POPP_KID}" übereinstimmt
+    Und TGR speichere Wert des Knotens "${headers.popp.root}" der aktuellen Anfrage in der Variable "PoPP_TOKEN"
+    Und verifiziere die ES256 Signatur des JWT "${PoPP_TOKEN}"
+    Dann TGR finde die letzte Anfrage mit dem Pfad "${poppSignedJwksPath}"
+    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "200|304"
+    Dann TGR finde die letzte Anfrage mit Pfad "${paths.guard.helloZetaPath}" und Knoten "${headers.popp.root}.header.kid" der mit "${UNKNOWN_POPP_KID}" übereinstimmt
+    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "403"
+
+    Gegeben sei TGR lösche aufgezeichnete Nachrichten
+    Und Setze im TigerProxy für JWT in "${headers.popp.strict}" das Feld "header.kid" auf Wert "${UNKNOWN_POPP_KID}" mit privatem Schlüssel "${PoPP_PRIVATE_KEY}" für Pfad "${pathCondition}" und 1 Ausführungen
+    Und Setze im TigerProxy für die Nachricht "${poppSignedJwksResponseCondition}" die Manipulation auf Feld "$.responseCode" und Wert "500" und 1 Ausführungen
+    Wenn TGR sende eine leere GET Anfrage an "${paths.client.reset}"
+    Und TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
+
+    Dann TGR finde die letzte Anfrage mit Pfad "${paths.guard.helloZetaPath}" und Knoten "${headers.popp.root}.header.kid" der mit "${UNKNOWN_POPP_KID}" übereinstimmt
+    Und TGR speichere Wert des Knotens "${headers.popp.root}" der aktuellen Anfrage in der Variable "PoPP_TOKEN"
+    Und verifiziere die ES256 Signatur des JWT "${PoPP_TOKEN}"
+    Dann TGR finde die letzte Anfrage mit dem Pfad "${poppSignedJwksPath}"
+    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "500"
+    Dann TGR finde die letzte Anfrage mit Pfad "${paths.guard.helloZetaPath}" und Knoten "${headers.popp.root}.header.kid" der mit "${UNKNOWN_POPP_KID}" übereinstimmt
+    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "403"
+
   @A_25660
   @A_26477
   @A_26661
   @TA_A_25660_03
   @TA_A_26477_08
   @TA_A_26661_20
-  Szenariogrundriss: PoPP Token Manipulation Test - Token Request
+  @MASVS-AUTH
+  Szenario: PoPP Token Manipulation Test - actorId Claim
     Gegeben sei TGR sende eine leere GET Anfrage an "${paths.client.reset}"
 
     Wenn TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
     Und TGR setze lokale Variable "PoPP_PRIVATE_KEY" auf "MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgChSTcLLu6By9RINWnfQdtCqkm8WlOcje4oDnLV5KpmigCgYIKoZIzj0DAQehRANCAARwLyN6z4jOFORwcx0yMnrJ/2XGUR7b/Vcbo5W02kT7b9rKjub8r2tuBEJ/AIEupjjZ3kYSCPKoUS6v1SNOg8Th"
 
     Und TGR setze lokale Variable "pathCondition" auf ".*${paths.guard.helloZetaPath}"
+    Und TGR setze lokale Variable "WRONG_ACTOR_ID" auf "evil_client"
 
-    Dann Setze im TigerProxy für JWT in "${headers.popp.root}" das Feld "<JwtField>" auf Wert "<NeuerWert>" mit privatem Schlüssel "${PoPP_PRIVATE_KEY}" für Pfad "${pathCondition}" und 1 Ausführungen und ersetze JWK
+    Dann Setze im TigerProxy für JWT in "${headers.popp.strict}" das Feld "body.actorId" auf Wert "${WRONG_ACTOR_ID}" mit privatem Schlüssel "${PoPP_PRIVATE_KEY}" für Pfad "${pathCondition}" und 1 Ausführungen und ersetze JWK
 
+    Gegeben sei TGR lösche aufgezeichnete Nachrichten
     Gegeben sei TGR sende eine leere GET Anfrage an "${paths.client.reset}"
     Wenn TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
 
     Und TGR finde die letzte Anfrage mit dem Pfad "${paths.guard.helloZetaPath}"
 
     # Finde den manipulierten Request anhand des geänderten Wertes
-    Dann TGR finde die letzte Anfrage mit Pfad "${paths.guard.helloZetaPath}" und Knoten "${headers.popp.root}.<JwtField>" der mit "<NeuerWert>" übereinstimmt
+    Dann TGR finde die letzte Anfrage mit Pfad "${paths.guard.helloZetaPath}" und Knoten "${headers.popp.body.actorId}" der mit "${WRONG_ACTOR_ID}" übereinstimmt
     Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "403"
 
-    # 2. Manipuliere die Signatur des PoPP Token
-    # 3. Gültigkeitsdauer gesamt
-    # 4. Gültigkeitsdauer nach Ausstellungszeitpunkt (iat = 2023-12-01 12:00)
-    # 5. Gültigkeitsdauer nach Prüfzeitpunkt (patientProofTime = 2023-12-01 12:00)
-    # 6. Manipulierte "actorId"
-    Beispiele: Manipulationen
-      | JwtField                 | NeuerWert   |
-      | body.iat                 | 1701432000  |
-      | body.patientProofTime    | 1701432000  |
-      | body.actorId             | evil_client |
-
-  @dev
   @A_26477
   @A_26661
+  @deployment_modification
+  @TA_A_26477_02
+  @TA_A_26477_10
+  @TA_A_26661_20
+  @MASVS-AUTH
+  Szenario: PoPP Token mit zu altem iat wird abgelehnt
+    Gegeben sei setze die PoPP Token Gültigkeit im ZETA Deployment auf "300s"
+    Und TGR sende eine leere GET Anfrage an "${paths.client.reset}"
+    Und TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
+    Wenn TGR sende eine leere GET Anfrage an "${paths.client.storage}"
+    Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.client.storagePath}"
+    Und TGR finde die letzte Anfrage mit dem Pfad "${paths.guard.tokenEndpointPath}"
+    Und TGR speichere Wert des Knotens "$.body.subject_token.header.x5c.0" der aktuellen Anfrage in der Variable "smcbCertificate"
+    Und schreibe Daten aus dem SMC-B Zertifikat "${smcbCertificate}" in die Variable "SMCB-INFO"
+    Und hole frisches PoPP Token aus dem Generator für Akteur "${SMCB-INFO.telematikId}" und Profession "${SMCB-INFO.professionId}" und speichere in der Variable "PoPP_TOKEN"
+    Und TGR setze lokale Variable "PoPP_PRIVATE_KEY" auf "!{file('src/test/resources/keys/popp-token-server_ecKey.pem')}"
+    Und TGR setze lokale Variable "pathCondition" auf ".*${paths.guard.helloZetaPath}"
+    Und TGR setze lokale Variable "OLD_IAT" auf "1701432000"
+
+    # Für die Parameter-Prüfung wird das PoPP-Token weiter mit dem echten PoPP-Server-Key signiert.
+    Dann Setze im TigerProxy für JWT in "${headers.popp.strict}" das Feld "body.iat" auf Wert "${OLD_IAT}" mit privatem Schlüssel "${PoPP_PRIVATE_KEY}" für Pfad "${pathCondition}" und 1 Ausführungen und ersetze JWK
+
+    Wenn TGR lösche aufgezeichnete Nachrichten
+    Und TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}" mit folgenden Headern:
+      | PoPP | ${PoPP_TOKEN} |
+
+    Dann TGR finde die letzte Anfrage mit Pfad "${paths.guard.helloZetaPath}" und Knoten "${headers.popp.body.iat}" der mit "${OLD_IAT}" übereinstimmt
+    Und TGR speichere Wert des Knotens "${headers.popp.root}" der aktuellen Anfrage in der Variable "PoPP_TOKEN"
+    Und verifiziere die ES256 Signatur des JWT "${PoPP_TOKEN}"
+    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "403"
+
+  @A_26477
+  @A_26661
+  @deployment_modification
+  @TA_A_26477_03
+  @TA_A_26477_10
+  @TA_A_26661_20
+  @MASVS-AUTH
+  Szenario: PoPP Token mit Ausstellungszeitpunkt außerhalb des Prüfzeitpunkt-Quartals wird abgelehnt
+    Gegeben sei setze die PoPP Token Gültigkeit im ZETA Deployment auf "quarter"
+    Und TGR lösche aufgezeichnete Nachrichten
+    Und TGR sende eine leere GET Anfrage an "${paths.client.reset}"
+    Und TGR setze lokale Variable "PoPP_PRIVATE_KEY" auf "!{file('src/test/resources/keys/popp-token-server_ecKey.pem')}"
+    Und TGR setze lokale Variable "pathCondition" auf ".*${paths.guard.helloZetaPath}"
+    Und speichere einen Zeitstempel aus dem vorherigen Quartal in der Variable "IAT_OUTSIDE_QUARTER"
+
+    # Für die Quartalsprüfung wird das PoPP-Token weiter mit dem echten PoPP-Server-Key signiert.
+    Dann Setze im TigerProxy für JWT in "${headers.popp.strict}" das Feld "body.iat" auf Wert "${IAT_OUTSIDE_QUARTER}" mit privatem Schlüssel "${PoPP_PRIVATE_KEY}" für Pfad "${pathCondition}" und 1 Ausführungen und ersetze JWK
+
+    Wenn TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
+
+    Dann TGR finde die letzte Anfrage mit Pfad "${paths.guard.helloZetaPath}" und Knoten "${headers.popp.body.iat}" der mit "${IAT_OUTSIDE_QUARTER}" übereinstimmt
+    Und TGR speichere Wert des Knotens "${headers.popp.root}" der aktuellen Anfrage in der Variable "PoPP_TOKEN"
+    Und verifiziere die ES256 Signatur des JWT "${PoPP_TOKEN}"
+    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "403"
+
+  @A_26450
+  @A_26477
+  @A_26661
+  @TA_A_26450_01
   @TA_A_26477_09
   @TA_A_26661_20
+  @MASVS-CRYPTO
+  @MASVS-AUTH
   Szenario: PoPP Token mit ungültiger Signatur wird abgelehnt
     Gegeben sei TGR sende eine leere GET Anfrage an "${paths.client.reset}"
 
@@ -78,22 +201,26 @@ Funktionalität: Client_ressource_anfrage_fachdienst_PoPP-Header_SC_403
     Und TGR setze lokale Variable "PoPP_PRIVATE_KEY" auf "!{file('src/test/resources/keys/popp-token-foreign_ecKey.pem')}"
     Und TGR setze lokale Variable "pathCondition" auf ".*${paths.guard.helloZetaPath}"
 
-    # PoPP-Token mit fremdem Key neu signieren, aber JWK NICHT ersetzen
+    # Belastbarer Nachweis für TA_A_26450_01:
+    # Der bestehende TGR-JWT-Manipulationsschritt signiert den PoPP-Token mit einem fremden Key neu,
+    # ohne das JWK zu ersetzen; zusammen mit dem 403-Nachweis prüft das die RFC7515-Signaturverifikation.
     # Feldwahl ist absichtlich "harmlos", damit die Ablehnung nur auf die Signatur zurückzuführen ist
-    Dann Setze im TigerProxy für JWT in "${headers.popp.root}" das Feld "body.insurerId" auf Wert "${PoPP_INSURER_ID}" mit privatem Schlüssel "${PoPP_PRIVATE_KEY}" für Pfad "${pathCondition}" und 1 Ausführungen
+    Dann Setze im TigerProxy für JWT in "${headers.popp.strict}" das Feld "body.insurerId" auf Wert "${PoPP_INSURER_ID}" mit privatem Schlüssel "${PoPP_PRIVATE_KEY}" für Pfad "${pathCondition}" und 1 Ausführungen
 
+    Gegeben sei TGR lösche aufgezeichnete Nachrichten
     Gegeben sei TGR sende eine leere GET Anfrage an "${paths.client.reset}"
+    Und TGR lösche aufgezeichnete Nachrichten
     Wenn TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
 
-    # Prüfe, dass die Manipulation angewendet wurde
-    Dann TGR finde die letzte Anfrage mit Pfad "${paths.guard.helloZetaPath}" und Knoten "${headers.popp.body.insurerId}" der mit "${PoPP_INSURER_ID}" übereinstimmt
+    # Prüfe die erste manipulierte Anfrage in dieser Phase und ihre gepaarte Antwort
+    Dann TGR finde die erste Anfrage mit Pfad "${paths.guard.helloZetaPath}" und Knoten "${headers.popp.body.insurerId}" der mit "${PoPP_INSURER_ID}" übereinstimmt
     Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "403"
 
-  @dev
   @A_26477
   @A_26661
   @TA_A_26477_06
   @TA_A_26661_20
+  @MASVS-AUTH
   Szenario: PoPP Token mit fremdem Schlüssel signiert wird abgelehnt
     Gegeben sei TGR sende eine leere GET Anfrage an "${paths.client.reset}"
 
@@ -106,68 +233,16 @@ Funktionalität: Client_ressource_anfrage_fachdienst_PoPP-Header_SC_403
 
     # PoPP-Token mit fremdem Key neu signieren UND JWK ersetzen
     # Signatur ist mathematisch gültig, aber Key ist nicht im JWKS des PoPP Servers
-    Dann Setze im TigerProxy für JWT in "${headers.popp.root}" das Feld "body.insurerId" auf Wert "${PoPP_INSURER_ID}" mit privatem Schlüssel "${PoPP_PRIVATE_KEY}" für Pfad "${pathCondition}" und 1 Ausführungen und ersetze JWK
+    Dann Setze im TigerProxy für JWT in "${headers.popp.strict}" das Feld "body.insurerId" auf Wert "${PoPP_INSURER_ID}" mit privatem Schlüssel "${PoPP_PRIVATE_KEY}" für Pfad "${pathCondition}" und 1 Ausführungen und ersetze JWK
 
+    Gegeben sei TGR lösche aufgezeichnete Nachrichten
     Gegeben sei TGR sende eine leere GET Anfrage an "${paths.client.reset}"
+    Und TGR lösche aufgezeichnete Nachrichten
     Wenn TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
 
-    # Prüfe, dass die Manipulation angewendet wurde und der Token weiterhin schema-konform ist
-    Dann TGR finde die letzte Anfrage mit Pfad "${paths.guard.helloZetaPath}" und Knoten "${headers.popp.body.insurerId}" der mit "${PoPP_INSURER_ID}" übereinstimmt
+    # Prüfe die erste manipulierte Anfrage in dieser Phase und ihre gepaarte Antwort
+    Dann TGR finde die erste Anfrage mit Pfad "${paths.guard.helloZetaPath}" und Knoten "${headers.popp.body.insurerId}" der mit "${PoPP_INSURER_ID}" übereinstimmt
+    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "403"
     Und TGR speichere Wert des Knotens "${headers.popp.root}" der aktuellen Anfrage in der Variable "PoPP_TOKEN"
     Und verifiziere die ES256 Signatur des JWT "${PoPP_TOKEN}"
-    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "403"
-
-  @A_26493
-  @A_27007
-  @A_26661
-  @TA_A_26493_01
-  @TA_A_26661_20
-  @longrunning
-  Szenario: PoPP JWKS wird nach einem zweiten Ablauf nicht weiterverwendet, wenn kein neues JWKS ladbar ist
-    Gegeben sei TGR sende eine leere GET Anfrage an "${paths.client.reset}"
-    Und TGR setze lokale Variable "poppJwksPath" auf "${paths.popp.jwks}"
-    Und TGR setze lokale Variable "poppJwksResponseCondition" auf "isResponse && request.path =~ '.*${poppJwksPath}'"
-    # 24h ist ein JWKS Abruf gültig
-    Und TGR setze lokale Variable "poppJwksExpiryWait" auf "86400"
-    # Alle 5 Minuten erfolgt ein JWKS Abruf
-    Und TGR setze lokale Variable "poppJwksRequestWait" auf "300"
-
-    # Erster Ressource Abruf triggert JWKS-Download mit kurzer Cache-Dauer
-    Wenn TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
-    Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.guard.helloZetaPath}"
-    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "200"
-
-    # JWKS ablaufen lassen und erneuten Download für 24h fehlschlagen lassen
-    Und Setze im TigerProxy für die Nachricht "${poppJwksResponseCondition}" die Manipulation auf Feld "$.responseCode" und Wert "500"
-    Und warte "${poppJwksRequestWait}" Sekunden
-    # Prüfen das JWKS beim ersten Interval nicht abgerufen werden konnte
-    Dann TGR finde die letzte Anfrage mit dem Pfad "${poppJwksPath}"
-    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "500"
-
-    # Prüfen das JWKS nach 24h nicht abgefragt werden konnte
-    Und warte "${poppJwksExpiryWait}" Sekunden
-    Dann TGR finde die letzte Anfrage mit dem Pfad "${poppJwksPath}"
-    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "500"
-
-    # Erneute Ressource Anfrage - bestehendes JWKS wird weiter genutzt
-    Wenn TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
-    Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.guard.helloZetaPath}"
-    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "200"
-
-    # Erneuter Testlauf bei dem nach weiteren 24h JWKS nicht mehr verwendet werden darf
-    # JWKS ablaufen lassen und erneuten Download für 24h fehlschlagen lassen
-    Und Setze im TigerProxy für die Nachricht "${poppJwksResponseCondition}" die Manipulation auf Feld "$.responseCode" und Wert "500"
-    Und warte "${poppJwksRequestWait}" Sekunden
-    # Prüfen das JWKS beim nächsten Interval nicht abgerufen werden konnte
-    Dann TGR finde die letzte Anfrage mit dem Pfad "${poppJwksPath}"
-    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "500"
-
-    # Prüfen das JWKS nach 24h nicht abgefragt werden konnte
-    Und warte "${poppJwksExpiryWait}" Sekunden
-    Dann TGR finde die letzte Anfrage mit dem Pfad "${poppJwksPath}"
-    Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "500"
-
-    # Erneute Ressource Anfrage - bestehendes JWKS wird weiter genutzt
-    Wenn TGR sende eine leere GET Anfrage an "${paths.client.helloZeta}"
-    Dann TGR finde die letzte Anfrage mit dem Pfad "${paths.guard.helloZetaPath}"
     Und TGR prüfe aktuelle Antwort stimmt im Knoten "$.responseCode" überein mit "403"

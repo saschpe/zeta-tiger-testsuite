@@ -33,6 +33,7 @@ import de.gematik.zeta.services.model.ZetaDeploymentDetails;
 import de.gematik.zeta.services.model.ZetaDisableAslRequest;
 import de.gematik.zeta.services.model.ZetaEnableAslRequest;
 import de.gematik.zeta.services.model.ZetaPoppTokenToggleRequest;
+import de.gematik.zeta.services.model.ZetaPoppTokenValidityRequest;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -200,6 +201,29 @@ public class ZetaDeploymentConfigurationService {
   }
 
   /**
+   * Sets the PoPP token validity mode in the PEP proxy of a ZETA Guard deployment.
+   *
+   * @param details Required information that define ZETA Guard deployment
+   * @param request Request parameter required for modifying PoPP token validity
+   * @param validity PoPP validity value, either {@code quarter} or a duration like {@code 300s}
+   * @return Object containing information about the executed ConfigMap patch
+   * @throws TimeoutException if waiting time for expected system state is exceeded
+   * @throws InterruptedException sleeping thread is interrupted by system
+   * @throws IOException if required temporary file could not be created
+   */
+  public KubectlPatchCommandResult setPoppTokenValidity(ZetaDeploymentDetails details,
+      ZetaPoppTokenValidityRequest request, String validity)
+      throws IOException, InterruptedException, TimeoutException {
+
+    var patchFunc = getPoppValidityFunction(request, validity);
+
+    return modifyZetaPoppVerification(
+        details.namespace(), details.pepPodName(), details.nginxConfigMapName(), details.nginxConfigMapKeySegments(),
+        patchFunc
+    );
+  }
+
+  /**
    * Performs a simple health check against the provided namespace.
    *
    * <p>This check should make sure that the kubectl binary is available and that the
@@ -214,6 +238,65 @@ public class ZetaDeploymentConfigurationService {
       throw new AssertionError(String.format("Requirement check failed: cannot execute kubectl command. "
           + "stderr output:\n%s", r.stderr()));
     }
+  }
+
+  /**
+   * Reads the desired replica count from a deployment spec.
+   *
+   * @param namespace Kubernetes namespace
+   * @param deploymentName deployment name
+   * @return successful result with replica count in stdout, otherwise a failing command result
+   */
+  public CommandResult getDeploymentReplicaCount(String namespace, String deploymentName) {
+    Objects.requireNonNull(namespace, "namespace must not be null");
+    Objects.requireNonNull(deploymentName, "deploymentName must not be null");
+
+    CommandResult result = executeKubectlCommand(
+        "get", "deployment", deploymentName, "-n", namespace, "-o", "jsonpath='{.spec.replicas}'");
+    if (result.exitCode() != 0) {
+      return result;
+    }
+
+    String stdout = result.stdout() == null ? "" : result.stdout().trim();
+    if (stdout.isBlank()) {
+      stdout = "1";
+    }
+
+    try {
+      Integer.parseInt(stdout);
+      return new CommandResult(result.command(), 0, stdout, result.stderr());
+    } catch (NumberFormatException e) {
+      return new CommandResult(
+          result.command(),
+          1,
+          result.stdout(),
+          "Could not parse deployment replicas for " + deploymentName + ": " + stdout);
+    }
+  }
+
+  /**
+   * Scales a deployment to the requested replica count and waits until rollout and replica readiness
+   * are complete.
+   *
+   * @param namespace Kubernetes namespace
+   * @param deploymentName deployment name
+   * @param replicas desired replica count
+   * @return successful command result when scaling and rollout succeeded, otherwise a failing result
+   */
+  public CommandResult scaleDeployment(String namespace, String deploymentName, int replicas) {
+    Objects.requireNonNull(namespace, "namespace must not be null");
+    Objects.requireNonNull(deploymentName, "deploymentName must not be null");
+    if (replicas < 0) {
+      throw new IllegalArgumentException("replicas must not be negative");
+    }
+
+    CommandResult scaleResult = executeKubectlCommand(
+        "scale", "deployment", deploymentName, "-n", namespace, "--replicas=" + replicas);
+    if (scaleResult.exitCode() != 0) {
+      return scaleResult;
+    }
+
+    return waitForDeploymentRollout(namespace, deploymentName, this.podReadyTimeoutSeconds);
   }
 
   /**
@@ -1676,6 +1759,47 @@ public class ZetaDeploymentConfigurationService {
       }
       return str.replace(originalSection, patchedSection);
     };
+  }
+
+  /**
+   * Creates a function that sets the global PoPP token validity directive in nginx config.
+   *
+   * @param request request containing regexes and the target directive template
+   * @param validity PoPP validity value, either {@code quarter} or a duration like {@code 300s}
+   * @return Function that sets the PoPP validity directive
+   */
+  private UnaryOperator<String> getPoppValidityFunction(ZetaPoppTokenValidityRequest request, String validity) {
+    var targetDirective = renderPoppValidityDirective(request.nginxPoppValidityTemplate(), validity);
+
+    return str -> {
+      var validityMatcher = Pattern.compile(request.nginxPoppValidityRegex()).matcher(str);
+      if (validityMatcher.find()) {
+        return validityMatcher.replaceAll(Matcher.quoteReplacement(targetDirective));
+      }
+
+      var anchorMatcher = Pattern.compile(request.nginxPoppValidityAnchorRegex()).matcher(str);
+      if (!anchorMatcher.find()) {
+        throw new IllegalStateException("Cannot set PoPP token validity: pep_popp_issuer anchor was not found");
+      }
+
+      return anchorMatcher.replaceFirst(Matcher.quoteReplacement(anchorMatcher.group(0) + "\n    " + targetDirective));
+    };
+  }
+
+  /**
+   * Renders the PoPP validity directive after validating the configured test value.
+   *
+   * @param template directive template containing a single {@code %s} placeholder
+   * @param validity PoPP validity value, either {@code quarter} or a duration like {@code 300s}
+   * @return rendered nginx directive
+   */
+  private String renderPoppValidityDirective(String template, String validity) {
+    var trimmedValidity = Objects.requireNonNull(validity, "validity must not be null").trim();
+    if (!trimmedValidity.matches("quarter|\\d+(?:[dhms])?")) {
+      throw new IllegalArgumentException(
+          "PoPP token validity must be 'quarter' or a duration like '300s', but was: " + validity);
+    }
+    return template.formatted(trimmedValidity);
   }
 
   /**

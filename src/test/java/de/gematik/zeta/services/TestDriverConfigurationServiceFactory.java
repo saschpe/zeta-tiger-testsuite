@@ -37,12 +37,23 @@ public class TestDriverConfigurationServiceFactory {
    * @return configured testdriver client
    */
   public static TestDriverConfigurationService getInstance() {
-    var resetUrl = TigerGlobalConfiguration.readStringOptional("paths.client.reset")
+    return getInstanceForPathPrefix("paths.client");
+  }
+
+  /**
+   * Creates a preconfigured {@link TestDriverConfigurationService} from the given path prefix.
+   *
+   * @param pathPrefix Tiger config prefix containing {@code reset} and {@code configure}
+   * @return configured testdriver client
+   */
+  public static TestDriverConfigurationService getInstanceForPathPrefix(final String pathPrefix) {
+    var resetUrl = TigerGlobalConfiguration.readStringOptional(pathPrefix + ".reset")
         .map(TigerGlobalConfiguration::resolvePlaceholders)
-        .orElseThrow(() -> new AssertionError("The testdriver reset URL is not configured."));
-    var configureUrl = TigerGlobalConfiguration.readStringOptional("paths.client.configure")
+        .orElseThrow(() -> new AssertionError("The testdriver reset URL is not configured at " + pathPrefix + ".reset."));
+    var configureUrl = TigerGlobalConfiguration.readStringOptional(pathPrefix + ".configure")
         .map(TigerGlobalConfiguration::resolvePlaceholders)
-        .orElseThrow(() -> new AssertionError("The testdriver configure URL is not configured."));
+        .orElseThrow(() -> new AssertionError(
+            "The testdriver configure URL is not configured at " + pathPrefix + ".configure."));
 
     try {
       return new TestDriverConfigurationService(resetUrl, configureUrl);

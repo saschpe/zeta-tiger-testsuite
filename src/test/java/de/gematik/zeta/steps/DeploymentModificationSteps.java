@@ -40,6 +40,7 @@ import de.gematik.zeta.services.model.ZetaDeploymentDetails;
 import de.gematik.zeta.services.model.ZetaDisableAslRequest;
 import de.gematik.zeta.services.model.ZetaEnableAslRequest;
 import de.gematik.zeta.services.model.ZetaPoppTokenToggleRequest;
+import de.gematik.zeta.services.model.ZetaPoppTokenValidityRequest;
 import io.cucumber.java.de.Gegebensei;
 import io.cucumber.java.de.Und;
 import io.cucumber.java.de.Wenn;
@@ -48,6 +49,8 @@ import io.cucumber.java.en.Given;
 import io.cucumber.java.en.When;
 import io.restassured.http.Method;
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
@@ -191,6 +194,32 @@ public class DeploymentModificationSteps {
   }
 
   /**
+   * Cucumber step to set the PoPP token validity mode in a ZETA Guard deployment.
+   *
+   * @param validity PoPP validity value, either {@code quarter} or a duration like {@code 300s}
+   * @throws AssertionError if any exception occurred during setup or execution; added as wrapper for consistency
+   */
+  @Und("setze die PoPP Token Gültigkeit im ZETA Deployment auf {tigerResolvedString}")
+  @And("set PoPP token validity in ZETA deployment to {tigerResolvedString}")
+  public void setPoppTokenValidity(String validity) throws AssertionError {
+    assertModificationIsAllowed();
+
+    ZetaDeploymentDetails details = getDeploymentDetails();
+    ZetaPoppTokenValidityRequest request = getPoppTokenValidityRequest();
+    try {
+      service.setPoppTokenValidity(details, request, validity);
+    } catch (TimeoutException te) {
+      throw new AssertionError("Timeout occurred while waiting for command or system state", te);
+    } catch (InterruptedException ie) {
+      throw new AssertionError("Command execution was interrupted", ie);
+    } catch (IOException ioe) {
+      throw new AssertionError("An error occurred handling temporary files", ioe);
+    } catch (Exception e) {
+      throw new AssertionError("An unexpected error occurred", e);
+    }
+  }
+
+  /**
    * Asserts that steps that modify the ZETA guard deployment are allowed by configuration.
    *
    * @throws AssertionError if modification step is not allowed
@@ -202,6 +231,82 @@ public class DeploymentModificationSteps {
       return;
     }
     throw new AssertionError("Deployment modification is not allowed, won't execute step");
+  }
+
+  /**
+   * Scales a deployment to the requested replica count and waits until rollout is finalized.
+   *
+   * @param deploymentName deployment name
+   * @param replicas desired replica count
+   */
+  @Und("skaliere das Deployment {tigerResolvedString} auf {int} Replikas")
+  @And("scale deployment {tigerResolvedString} to {int} replicas")
+  public void scaleDeployment(String deploymentName, int replicas) {
+    assertModificationIsAllowed();
+
+    String namespace = TigerGlobalConfiguration.readStringOptional("zetaDeploymentConfig.namespace")
+        .orElse("");
+    if (namespace.isBlank()) {
+      throw new AssertionError("Namespace for deployment scaling is not configured");
+    }
+
+    CommandResult currentReplicasResult = service.getDeploymentReplicaCount(namespace, deploymentName);
+    if (currentReplicasResult.exitCode() != 0 || currentReplicasResult.stdout() == null
+        || currentReplicasResult.stdout().isBlank()) {
+      throw new AssertionError("Could not determine current replica count for deployment '" + deploymentName
+          + "': " + currentReplicasResult.stderr());
+    }
+
+    int currentReplicas;
+    try {
+      currentReplicas = Integer.parseInt(currentReplicasResult.stdout().trim());
+    } catch (NumberFormatException e) {
+      throw new AssertionError("Could not parse current replica count '" + currentReplicasResult.stdout()
+          + "' for deployment '" + deploymentName + "'", e);
+    }
+
+    Hooks.rememberDeploymentReplicaCountIfAbsent(deploymentName, currentReplicas);
+
+    CommandResult scaleResult = service.scaleDeployment(namespace, deploymentName, replicas);
+    if (scaleResult.exitCode() != 0) {
+      throw new AssertionError("Failed to scale deployment '" + deploymentName + "' to " + replicas
+          + " replicas.\n" + scaleResult.stderr());
+    }
+  }
+
+  /**
+   * Calculates and stores the minimum scalability target for a replica count based on a single-pod reference value.
+   *
+   * <p>The formula is {@code base + (replicas - 1) * ceil(base * 0.75)} so the baseline remains unchanged for one
+   * pod and each additional pod contributes at least 75 percent of the single-pod reference.</p>
+   *
+   * @param varName target variable name to store in test context
+   * @param baseValue reference value for one pod (may contain Tiger placeholders)
+   * @param replicas active replica count for the scenario
+   */
+  @Und("berechne und setze lokale Variable {string} aus Basis {tigerResolvedString} und {int} Replikas mit 75 Prozent Zusatzleistung pro Pod")
+  @And("calculate and set local variable {string} from base {tigerResolvedString} and {int} replicas with 75 percent additional capacity per pod")
+  public void calculateReplicaScaledThreshold(String varName, String baseValue, int replicas) {
+    if (varName == null || varName.isBlank()) {
+      throw new AssertionError("Target variable name must not be blank.");
+    }
+    if (replicas < 1) {
+      throw new AssertionError("Replica count must be at least 1 but was " + replicas + ".");
+    }
+
+    String resolvedBase = TigerGlobalConfiguration.resolvePlaceholders(baseValue).trim();
+    BigDecimal base;
+    try {
+      base = new BigDecimal(resolvedBase);
+    } catch (NumberFormatException e) {
+      throw new AssertionError("Base value must be numeric but was '" + resolvedBase + "'.", e);
+    }
+
+    BigDecimal perAdditionalPod = base.multiply(BigDecimal.valueOf(0.75d))
+        .setScale(0, RoundingMode.CEILING);
+    BigDecimal scaled = base.add(perAdditionalPod.multiply(BigDecimal.valueOf(replicas - 1L)));
+    String scaledText = scaled.setScale(0, RoundingMode.UNNECESSARY).toPlainString();
+    TigerGlobalConfiguration.putValue(varName, scaledText, ConfigurationValuePrecedence.TEST_CONTEXT);
   }
 
   /**
@@ -1624,6 +1729,35 @@ public class DeploymentModificationSteps {
         nginxPoppRegex,
         nginxPoppEnabled,
         nginxPoppDisabled
+    );
+  }
+
+  /**
+   * Builds the request object used to modify PoPP token validity in deployment configuration.
+   *
+   * @return request payload for PoPP validity modification
+   * @throws AssertionError when required configuration values are missing
+   */
+  private ZetaPoppTokenValidityRequest getPoppTokenValidityRequest() {
+    String nginxPoppValidityRegex = TigerGlobalConfiguration
+        .readStringOptional("zetaDeploymentConfig.pep.nginx.popp.validity.nginxConfigRegex")
+        .orElseThrow(() -> new AssertionError(
+            "Missing variable: zetaDeploymentConfig.pep.nginx.popp.validity.nginxConfigRegex"));
+
+    String nginxPoppValidityAnchorRegex = TigerGlobalConfiguration
+        .readStringOptional("zetaDeploymentConfig.pep.nginx.popp.validity.nginxConfigAnchorRegex")
+        .orElseThrow(() -> new AssertionError(
+            "Missing variable: zetaDeploymentConfig.pep.nginx.popp.validity.nginxConfigAnchorRegex"));
+
+    String nginxPoppValidityTemplate = TigerGlobalConfiguration
+        .readStringOptional("zetaDeploymentConfig.pep.nginx.popp.validity.nginxConfigTemplate")
+        .orElseThrow(() -> new AssertionError(
+            "Missing variable: zetaDeploymentConfig.pep.nginx.popp.validity.nginxConfigTemplate"));
+
+    return new ZetaPoppTokenValidityRequest(
+        nginxPoppValidityRegex,
+        nginxPoppValidityAnchorRegex,
+        nginxPoppValidityTemplate
     );
   }
 

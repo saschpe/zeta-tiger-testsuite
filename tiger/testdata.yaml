@@ -10,3 +10,11 @@ policy_rejection:
   invalid_product_version_error_hint: 'Die product_version wird nicht unterstützt.'
   invalid_scope_error_hint: 'Der angeforderte scope ist nicht verfügbar.'
   invalid_audience_error_hint: 'Die angeforderte audience ist nicht erreichbar.'
+
+invalidEtag: "\"invalid-etag\""
+
+popp:
+  proofMethod: "ehc-practitioner-user-x509"
+  patientId: "X110639491"
+  insurerId: "109500969"
+  actorProfessionOid: "1.2.276.0.76.4.32"

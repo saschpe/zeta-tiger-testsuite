@@ -1,9 +1,0 @@
-[#TA_GS-A_4384-03_05]
-===== TA_GS-A_4384-03_05 - TLS-Verbindungen - ZETA Guard - PDP Authorization Server - X.509-Identität
-
-Alle Produkttypen, die **Übertragungen mittels TLS** durchführen, MÜSSEN die folgenden Vorgaben erfüllen:
-
-* Zur **Authentifizierung** MUSS eine **X.509-Identität** gemäß [gemSpec_Krypt#**GS-A_4359**-*] verwendet werden.
-* [...]
-
-**[<=]**

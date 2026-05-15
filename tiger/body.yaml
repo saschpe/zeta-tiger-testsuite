@@ -1,0 +1,3 @@
+client:
+  storage:
+      dpop_private_key: "$.body.[?(key =~ '^dpop_private_key(_.+)?$')]"

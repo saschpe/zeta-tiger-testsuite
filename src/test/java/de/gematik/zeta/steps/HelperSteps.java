@@ -165,6 +165,32 @@ public class HelperSteps {
   }
 
   /**
+   * Verifies that no recorded request has a path equal to or matching the given pattern.
+   *
+   * @param pathPattern the request path or regular expression that must not occur in the recorded request history
+   */
+  @Dann("prüfe, dass keine aufgezeichnete Anfrage den Pfad {tigerResolvedString} hat")
+  @Then("verify no recorded request has path {tigerResolvedString}")
+  public void verifyNoRecordedRequestHasPath(String pathPattern) {
+    var messages = RbelMessageRetriever.getInstance().getMessageHistory().getMessages();
+    if (messages == null || messages.isEmpty()) {
+      return;
+    }
+
+    var matchingPaths = messages
+        .stream()
+        .filter(this::isRequestMessage)
+        .flatMap(message -> extractPathValues(message).stream())
+        .filter(path -> path.equals(pathPattern) || path.matches(pathPattern))
+        .toList();
+
+    Assertions
+        .assertThat(matchingPaths)
+        .as("No recorded request path should match '%s'", pathPattern)
+        .isEmpty();
+  }
+
+  /**
    * Checks an optional expected value against a request node.
    *
    * <p>If the expected value is blank (null/empty/"null"), the node must be absent.
@@ -191,6 +217,13 @@ public class HelperSteps {
     checkOptionalValueAgainstNodeInternal(rbelPath, expectedValue, true);
   }
 
+  /**
+   * Checks an optional expected value against a request node, optionally recording failures as soft assertions.
+   *
+   * @param rbelPath      the RBEL path to the attribute in the request
+   * @param expectedValue the optional value to compare
+   * @param soft          whether assertion failures should be recorded as soft failures
+   */
   private void checkOptionalValueAgainstNodeInternal(String rbelPath, String expectedValue, boolean soft) {
     var rbelMessageRetriever = RbelMessageRetriever.getInstance();
     if (rbelMessageRetriever.getCurrentRequest() == null) {
@@ -250,6 +283,33 @@ public class HelperSteps {
         throw ex;
       }
     }
+  }
+
+  /**
+   * Checks whether an RBEL message represents a request with a path.
+   *
+   * @param message the RBEL message to inspect
+   * @return {@code true} if the message has a path and no response code
+   */
+  private boolean isRequestMessage(RbelElement message) {
+    return !message.findRbelPathMembers("$.path").isEmpty()
+        && message.findRbelPathMembers("$.responseCode").isEmpty();
+  }
+
+  /**
+   * Extracts all path values from an RBEL message.
+   *
+   * @param message the RBEL message to inspect
+   * @return trimmed path values from the message
+   */
+  private List<String> extractPathValues(RbelElement message) {
+    return message
+        .findRbelPathMembers("$.path")
+        .stream()
+        .map(RbelElement::getRawStringContent)
+        .filter(Objects::nonNull)
+        .map(String::trim)
+        .toList();
   }
 
   /**

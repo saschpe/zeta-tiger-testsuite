@@ -2,6 +2,68 @@
 
 # Release Notes ZETA Tiger Testsuite
 
+## Version: 1.0.1
+
+Release date: 2026-05-12
+
+Tiger Testsuite 1.0.1
+
+This version is a maintenance release of the ZETA Testsuite.
+It updates and extends the test coverage and stabilizes the build, documentation, runtime evidence, TLS checks, schema validation, and performance test handling.
+
+#### Test Focus:
+
+- Improved runtime coverage and partial failure reporting
+- Updated schema validation and schema fixtures
+- Hardened TLS test handling
+- Refactored performance test execution
+- Updated UseCase and scenario references
+- Additional negative scenarios for client authentication, authorization, resource access, and refresh-token handling
+- Stable CI and documentation build updates
+
+### Known issues:
+
+- Some tests require Kubernetes access to the target namespace and a matching ZETA Guard deployment configuration.
+- Telemetry scenarios depend on the availability and current data retention of OpenSearch, Jaeger, Prometheus, and the Telemetrie-Gateway Collector configuration.
+
+## Version: 1.0.0
+
+Release date: 2026-05-04
+
+> **BITTE BEACHTEN**
+> Der Testplan referenziert die Spezifikation und Testaspekte, die im Repository enthalten sind.
+> Die konkrete Ausführbarkeit einzelner Tests hängt weiterhin von der bereitgestellten ZETA Guard Testumgebung und deren Konfiguration ab.
+
+Tiger Testsuite 1.0.0
+
+This version is the first 1.0.0 release of the ZETA Testsuite.
+It validates the ZETA protocol between the ZETA client SDK and the ZETA Guard, including happy-flow coverage, negative checks, telemetry validation, TLS checks, and performance-oriented scenarios.
+
+#### Test Focus:
+
+- Discovery of server parameters via .well-known files
+- Nonce Endpoint
+- Software-based Client Attestation
+- DPoP token generation and validation
+- Client Registration
+- SM(C)-B Token use
+- Client Assertion
+- Access Token handling
+- Web Sockets
+- PoPP Token Validation
+- Policy Decision
+- Telemetrie
+- TLS Tests
+- Performance Tests
+- Runtime and configuration checks for selected Kubernetes-based ZETA Guard components
+
+### Known issues:
+
+- Some tests require Kubernetes access to the target namespace and a matching ZETA Guard deployment configuration.
+- Telemetry scenarios depend on the availability and current data retention of OpenSearch, Jaeger, Prometheus, and the Telemetrie-Gateway Collector configuration.
+
+#### Limitations
+
 ## Version: 0.5.0
 
 > **BITTE BEACHTEN**

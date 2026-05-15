@@ -70,7 +70,7 @@ class ScenarioCoverage:
   use_cases: Set[str]
   test_aspects: Set[str]
   requirements: Set[str]
-  product_implemented: bool = False
+  masvs_tags: Set[str] = field(default_factory=set)
 
 
 @dataclass(slots=True)
@@ -81,7 +81,6 @@ class TraceabilityRecord:
   test_aspect_id: str
   use_case_id: Optional[str]
   implemented: bool
-  product_implemented: bool
   scenario_names: Set[str] = field(default_factory=set)
 
 
@@ -93,7 +92,6 @@ class TraceabilityLink:
   test_aspect: str
   use_case: Optional[str]
   implemented: bool
-  product_implemented: bool
   scenarios: List[str]
 
 

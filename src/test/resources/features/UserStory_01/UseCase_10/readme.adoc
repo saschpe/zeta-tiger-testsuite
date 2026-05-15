@@ -1,26 +1,59 @@
 [#UC_01_10]
-== UseCase_01_10: Client authentisierung und autorisierung client attest SC 200
+== UseCase_01_10: Client authentisierung und autorisierung client attest TPM SC 200
 
 .UseCase_01_10
 [cols="1,1a",options="autowidth"]
 |===
-| *Titel:* | Client authentisierung und autorisierung client attest SC 200
+| *Titel:* | Client authentisierung und autorisierung client attest TPM SC 200
 
 | Akteur: |
+*MA einer LEI*
 
 | weitere Akteure: |
+*ZETA Client*
+*PDP Authorization Server*
+*SMC-B*
 
 | Auslöser: |
+Ein MA einer LEI möchte auf einen Resource Server zugreifen und muss sich dafür authentisieren und autorisieren.
 
 | Kurzbeschreibung: |
+Um auf einen Resource Server zugreifen zu können, benötigt der
+Client ein Access Token vom PDP Authorization Server.
+Stationäre ZETA Clients verwenden dafür den Token Exchange Flow mittels Client-Attestierung auf Basis eines TPM. +
+
+Im Mittelpunkt steht nicht die Software-Attestierung aus UseCase_06, sondern die Client-Attestierung: Das Client Statement in der
+``client_assertion`` enthält die aus dem TPM abgeleiteten Nachweise.
+Der PDP Authorization Server validiert den Token Request zusammen mit Subject Token, Client Assertion und DPoP Proof und stellt bei
+erfolgreicher Prüfung Access- und Refresh-Token aus.
 
 | Vorbedingung: |
+Der stationäre ZETA Client ist beim ZETA Guard registriert, d.h. es existiert bereits eine
+``client_id`` inklusive zugehörigem Schlüsselpaar.
+Der Client hat keine bestehende Session (kein gültiges Refresh Token).
 
 | Nebenbedingung: |
+Keine zusätzlichen Nebenbedingungen.
 
 | Ablauf: |
+1. MA startet *Authentisierung/Autorisierungs-Prozess (Token-Austausch)* über den ZETA Client.
+2. Der ZETA Client fordert beim PDP Authorization Server eine Nonce an.
+- ``GET /nonce``
+3. Der PDP Authorization Server liefert ``200 OK`` mit einer neuen Nonce zurück.
+4. Der ZETA Client erstellt ein *Client Statement* mit TPM-basierten Attestierungsdaten.
+5. Der ZETA Client erstellt ein *Client Assertion JWT*.
+6. Der ZETA Client erstellt ein *DPoP Proof JWT* für den Token-Austausch.
+7. Der ZETA Client sendet einen *Token Request* an den PDP Authorization Server.
+8. Der PDP Authorization Server validiert den Request.
+- Client Assertion
+- TPM-basierte Attestierung
+- DPoP Proof
+- Subject Token
+9. Der PDP Authorization Server liefert bei erfolgreicher Prüfung ``200 OK`` mit Access Token und Refresh Token zurück.
+10. Der ZETA Client informiert den MA über die erfolgreiche Zugriffrechtserteilung.
 
 | Nachbedingung: |
+Der stationäre ZETA Client kann auf einen Resource Server zugreifen, d.h. dieser ist authentisiert und autorisiert.
 
 | Abgedeckte Testaspekte: |
 
@@ -32,6 +65,6 @@ Feature-Datei zu diesem Use Case:
 
 [source]
 ----
-include::Client_authentisierung_und_autorisierung_client_attest_SC_200.feature[]
+//include::Client_authentisierung_und_autorisierung_client_attest_SC_200.feature[]
 ----
 endif::[]
